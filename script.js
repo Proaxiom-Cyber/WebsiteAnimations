@@ -83,6 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxDurationSeconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--max-animation-duration')) || 0.5; // Ensure this matches style.css
     const timingFunction = getComputedStyle(document.documentElement).getPropertyValue('--animation-timing-function').trim() || 'ease-out';
     const shrinkScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hover-shrink-scale')) || 0.95;
+    
+    // Fixed animation durations (no longer dynamic based on size)
+    const fixedTextAnimationDurationMs = maxDurationSeconds * 1000; // Fixed duration for all text animations
+    const fixedWedgeAnimationDurationMs = maxDurationSeconds * 1000; // Fixed duration for all wedge animations
 
     // Easing Map
     const easingMap = { 'ease': 'easeOutQuad', 'ease-in': 'easeInQuad', 'ease-out': 'easeOutQuad', 'ease-in-out': 'easeInOutQuad', 'linear': 'linear' };
@@ -143,37 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("FATAL: No wedge colors defined or found in CSS (--wedge-colors).");
         return; // Stop if no colors
     }
-    
-    // Define primary brand colors to prioritize
-    const primaryBrandColors = [
-        '#75c9b9', // Mint
-        '#2aa1b9', // Turquoise (IR IS BLUE)
-        '#4c8e9a', // Teal
-        '#f16867', // Salmon
-        '#094054'  // Indigo (this is dark but included since it's primary)
-    ];
-    
-    // Create a prioritized color array with primary colors first
-    const prioritizedColors = [];
-    
-    // First add all primary brand colors that exist in the CSS variables
-    primaryBrandColors.forEach(color => {
-        if (wedgeColorVarsMaster.includes(color) || 
-            wedgeColorVarsMaster.includes(color.toUpperCase())) {
-            prioritizedColors.push(color);
-        }
-    });
-    
-    // Then add all remaining colors from CSS
-    wedgeColorVarsMaster.forEach(color => {
-        // Only add if not already in prioritized list (case insensitive check)
-        const colorLower = color.toLowerCase();
-        if (!primaryBrandColors.some(primary => primary.toLowerCase() === colorLower)) {
-            prioritizedColors.push(color);
-        }
-    });
-    
-    console.log("Using prioritized brand colors for chart elements");
 
     const numServices = services.length;
     if (numServices === 0) {
@@ -221,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Assign Colors
     const assignedColors = new Array(numServices);
-    let availableColors = shuffleArray([...prioritizedColors]);
+    let availableColors = shuffleArray([...wedgeColorVarsMaster]);
     let lastAssignedColor = null;
     for (let i = 0; i < numServices; i++) { /* ... Color assignment logic (same as before) ... */
         let chosenColor = null; let chosenIndex = -1;
@@ -229,11 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chosenIndex === -1 && availableColors.length > 0) { chosenIndex = 0; }
         if (chosenIndex !== -1) { chosenColor = availableColors.splice(chosenIndex, 1)[0]; }
         else {
-            availableColors = shuffleArray([...prioritizedColors]); chosenIndex = -1;
+            availableColors = shuffleArray([...wedgeColorVarsMaster]); chosenIndex = -1;
             for (let j = 0; j < availableColors.length; j++) { if (availableColors[j] !== lastAssignedColor || availableColors.length === 1) { chosenIndex = j; break; } }
             if (chosenIndex !== -1) { chosenColor = availableColors.splice(chosenIndex, 1)[0]; }
             else if (availableColors.length > 0) { chosenColor = availableColors.splice(0, 1)[0]; }
-            else { chosenColor = "#75c9b9"; console.error("Critical Error assigning color, using Mint as fallback."); }
+            else { chosenColor = "#CCCCCC"; console.error("Critical Error assigning color."); }
         }
         assignedColors[i] = chosenColor; lastAssignedColor = chosenColor;
     }
@@ -252,6 +225,31 @@ document.addEventListener('DOMContentLoaded', () => {
              return { x: centerX, y: centerY }; // Fallback
          }
         return { x: x, y: y };
+    }
+
+    // Create curved path between two points
+    function createCurvedPath(startX, startY, endX, endY) {
+        // Calculate control points for a smooth curve
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Make the curve more pronounced for longer distances
+        const curveFactor = Math.min(0.5, Math.max(0.2, distance / 400));
+        
+        // Calculate midpoint with an offset for the curve
+        const midX = startX + dx * 0.5;
+        const midY = startY + dy * 0.5;
+        
+        // Calculate perpendicular offset for control points
+        // Use vector perpendicular to the line between start and end
+        const perpX = -dy * curveFactor;
+        const perpY = dx * curveFactor;
+        
+        // Create the path data string using quadratic Bezier curve
+        const pathData = `M ${startX} ${startY} Q ${midX + perpX} ${midY + perpY}, ${endX} ${endY}`;
+        
+        return pathData;
     }
 
     function describeOuterArc(x, y, radius, startAngle, endAngle){
@@ -590,23 +588,24 @@ document.addEventListener('DOMContentLoaded', () => {
             labelBox.classList.add('label-box', `label-box-${index}`);
 
             // Create Line
-            const labelLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            // Calculate angle from center to marker
-            // const lineStartAngleRad = Math.atan2(originalMarkerPos.y - center, originalMarkerPos.x - center); // OLD
-            // Calculate offset start point
-            // const lineStartX = originalMarkerPos.x + (markerRadius + 2) * Math.cos(lineStartAngleRad); // OLD
-            // const lineStartY = originalMarkerPos.y + (markerRadius + 2) * Math.sin(lineStartAngleRad); // OLD
+            const labelLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            labelLine.classList.add('label-line'); // Keep generic class + index specific on group
+            
+            // Calculate line points
             const lineStartPoint = calculateLineStartPoint(originalMarkerPos); // Use helper
-            labelLine.setAttribute('x1', lineStartPoint.x); // Use offset start point
-            labelLine.setAttribute('y1', lineStartPoint.y); // Use offset start point
-            // Adjust line endpoint to meet the box edge instead of text anchor
-            // (Simplified: aim line towards box center for now, can refine later if needed)
-            labelLine.setAttribute('x2', boxCenterX);
-            labelLine.setAttribute('y2', boxCenterY);
+            // Create curved path data
+            const pathData = createCurvedPath(
+                lineStartPoint.x, 
+                lineStartPoint.y, 
+                boxCenterX, 
+                boxCenterY
+            );
+            
+            labelLine.setAttribute('d', pathData);
+            labelLine.setAttribute('fill', 'none'); // Important for paths
             labelLine.setAttribute('stroke', labelLineColor);
             labelLine.setAttribute('stroke-width', labelLineStrokeWidth);
             labelLine.setAttribute('stroke-dasharray', labelDashArray);
-            labelLine.classList.add('label-line'); // Keep generic class + index specific on group
 
             // --- Position Text Inside Box ---
             // Create the main text element (container for tspans)
@@ -698,11 +697,6 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.error("MouseEnter: Failed HOVER marker calc."); return;
              }
 
-
-            // Calculate duration for THIS wedge's growth
-            const durationRatioActive = (maxPossibleOuterRadius > 0) ? Math.min(1, activeOriginalRadius / maxPossibleOuterRadius) : 1;
-            const dynamicDurationActiveMs = (maxDurationSeconds * Math.max(0.1, durationRatioActive)) * 1000;
-
             // Stop any existing animation on these elements before starting new ones
             anime.remove([activePath, activeMarker, activeGroup, activeLabelLine]); // Remove from line too
 
@@ -712,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
             anime({
                 targets: activePath,
                 d: hoverPathData, // Animate the 'd' attribute
-                duration: dynamicDurationActiveMs, // Use DYNAMIC duration
+                duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                 easing: animeEasing
             });
 
@@ -720,22 +714,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 targets: activeMarker,
                 cx: hoverMarkerPos.x, // Animate cx
                 cy: hoverMarkerPos.y, // Animate cy
-                duration: dynamicDurationActiveMs, // Use DYNAMIC duration
+                duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                 easing: animeEasing
             });
 
             // Animate the label line start point
             if (activeLabelLine && !isNaN(hoverMarkerPos.x) && !isNaN(hoverMarkerPos.y)) {
-                // Calculate offset hover start point
-                // const hoverLineStartAngleRad = Math.atan2(hoverMarkerPos.y - center, hoverMarkerPos.x - center); // OLD
-                // const hoverLineStartX = hoverMarkerPos.x + (markerRadius + 2) * Math.cos(hoverLineStartAngleRad); // OLD
-                // const hoverLineStartY = hoverMarkerPos.y + (markerRadius + 2) * Math.sin(hoverLineStartAngleRad); // OLD
                 const hoverLineStartPoint = calculateLineStartPoint(hoverMarkerPos); // Use helper
+                const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`);
+                const boxCenterX = parseFloat(activeLabelGroup.dataset.centerX || '0');
+                const boxCenterY = parseFloat(activeLabelGroup.dataset.centerY || '0');
+                
+                // Create new curved path
+                const newPathData = createCurvedPath(
+                    hoverLineStartPoint.x,
+                    hoverLineStartPoint.y,
+                    boxCenterX,
+                    boxCenterY
+                );
+                
                 anime({
                     targets: activeLabelLine,
-                    x1: hoverLineStartPoint.x, // Animate offset point
-                    y1: hoverLineStartPoint.y, // Animate offset point
-                    duration: dynamicDurationActiveMs,
+                    d: newPathData, // Animate the path data
+                    duration: fixedWedgeAnimationDurationMs,
                     easing: animeEasing
                 });
             } else {
@@ -744,7 +745,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Animate all groups (shrink inactive, ensure active is scale 1)
-            const labelHoverScale = 1.07; // How much the active label grows (Increased)
+            const labelHoverScale = 1.8; // How much the active label grows (80% increase)
+            const textShrinkScale = 0.8; // Shrink inactive text labels for better contrast
             wedgeGroups.forEach(group => {
                  // Stop any previous scaling animation on the group
                  anime.remove(group); // Remove only scaling from others
@@ -758,18 +760,16 @@ document.addEventListener('DOMContentLoaded', () => {
                  const groupOuterRadius = parseFloat(group.dataset.originalOuterRadius);
                  if (isNaN(groupOuterRadius)) { console.warn("Skipping scale for invalid radius", group.dataset.service); return; }
 
-                 const durationRatio = (maxPossibleOuterRadius > 0) ? Math.min(1, groupOuterRadius / maxPossibleOuterRadius) : 1;
-                 const dynamicDuration = maxDurationSeconds * Math.max(0.1, durationRatio);
                  let targetScale = shrinkScale;
-                 let labelTargetScale = shrinkScale; // Separate scale for label
+                 let labelTargetScale = textShrinkScale; // Use different shrink scale for labels
 
                  if (group === activeGroup) {
                      targetScale = 1.0; // Active wedge doesn't change scale
-                     labelTargetScale = labelHoverScale; // Active label grows
+                     labelTargetScale = labelHoverScale; // Active label grows significantly
                  } else {
                     // Animate INACTIVE wedge INWARDS (Shrink)
-                    targetScale = shrinkScale; // Inactive wedge target scale (used for label)
-                    labelTargetScale = shrinkScale; // Inactive label shrinks
+                    targetScale = shrinkScale; // Inactive wedge target scale
+                    labelTargetScale = textShrinkScale; // Inactive label shrinks more
  
                     const inactivePath = group.querySelector('.wedge-path');
                     const inactiveMarker = group.querySelector('.marker-circle');
@@ -797,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         anime({
                             targets: inactivePath, // Target the PATH
                             d: shrunkPathData,
-                            duration: dynamicDuration * 1000,
+                            duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                             easing: animeEasing
                         });
                     }
@@ -806,18 +806,28 @@ document.addEventListener('DOMContentLoaded', () => {
                             targets: inactiveMarker, // Target the MARKER
                             cx: shrunkMarkerPos.x,
                             cy: shrunkMarkerPos.y,
-                            duration: dynamicDuration * 1000,
+                            duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                             easing: animeEasing
                         });
                     }
                     // Animate INACTIVE line start point INWARDS
                     if (inactiveLabelLine && shrunkMarkerPos) {
                         const shrunkLineStartPoint = calculateLineStartPoint(shrunkMarkerPos);
+                        const labelCenterX = parseFloat(labelGroup.dataset.centerX || '0');
+                        const labelCenterY = parseFloat(labelGroup.dataset.centerY || '0');
+                        
+                        // Create new curved path
+                        const newPathData = createCurvedPath(
+                            shrunkLineStartPoint.x,
+                            shrunkLineStartPoint.y,
+                            labelCenterX,
+                            labelCenterY
+                        );
+                        
                         anime({
                             targets: inactiveLabelLine,
-                            x1: shrunkLineStartPoint.x,
-                            y1: shrunkLineStartPoint.y,
-                            duration: dynamicDuration * 1000,
+                            d: newPathData, // Animate the path data
+                            duration: fixedWedgeAnimationDurationMs,
                             easing: animeEasing
                         });
                     }
@@ -840,7 +850,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          anime({
                              targets: [boxToScale, textToScale], // Target BOX and TEXT only
                              transform: targetTransform, // Animate transform attribute directly
-                             duration: dynamicDuration * 1000,
+                             duration: fixedTextAnimationDurationMs, // Use FIXED duration for text boxes
                              easing: animeEasing
                          });
                      }
@@ -873,10 +883,6 @@ document.addEventListener('DOMContentLoaded', () => {
                  console.error("MouseLeave: Missing elements or original data/radius.", activeGroup.dataset); return;
             }
 
-            // Calculate duration for *this specific wedge* returning
-            const durationRatio = (maxPossibleOuterRadius > 0) ? Math.min(1, groupOuterRadius / maxPossibleOuterRadius) : 1;
-            const dynamicDurationMs = (maxDurationSeconds * Math.max(0.1, durationRatio)) * 1000;
-
             // Stop existing animations
             anime.remove([activePath, activeMarker, activeGroup, activeLabelLine]); // Remove from line too
 
@@ -886,30 +892,37 @@ document.addEventListener('DOMContentLoaded', () => {
             anime({
                 targets: activePath,
                 d: originalD, // Animate back to original shape
-                duration: dynamicDurationMs,
+                duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                 easing: animeEasing
             });
             anime({
                 targets: activeMarker,
                 cx: originalMX, // Animate back to original position
                 cy: originalMY,
-                duration: dynamicDurationMs,
+                duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                 easing: animeEasing
             });
 
             // Animate the label line start point back
             if (activeLabelLine && !isNaN(originalMX) && !isNaN(originalMY)) {
-                 // Calculate original offset start point (again, as originalMX/Y are marker centers)
-                // const originalLineStartAngleRad = Math.atan2(parseFloat(originalMY) - center, parseFloat(originalMX) - center); // OLD
-                // const originalLineStartX = parseFloat(originalMX) + (markerRadius + 2) * Math.cos(originalLineStartAngleRad); // OLD
-                // const originalLineStartY = parseFloat(originalMY) + (markerRadius + 2) * Math.sin(originalLineStartAngleRad); // OLD
                  const originalMarkerCenterPos = { x: parseFloat(originalMX), y: parseFloat(originalMY) };
                  const originalLineStartPoint = calculateLineStartPoint(originalMarkerCenterPos); // Use helper
+                 const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`);
+                 const boxCenterX = parseFloat(activeLabelGroup.dataset.centerX || '0');
+                 const boxCenterY = parseFloat(activeLabelGroup.dataset.centerY || '0');
+                 
+                 // Create original curved path
+                 const originalPathData = createCurvedPath(
+                     originalLineStartPoint.x,
+                     originalLineStartPoint.y,
+                     boxCenterX,
+                     boxCenterY
+                 );
+                 
                 anime({
                     targets: activeLabelLine,
-                    x1: originalLineStartPoint.x, // Animate back to offset point
-                    y1: originalLineStartPoint.y, // Animate back to offset point
-                    duration: dynamicDurationMs,
+                    d: originalPathData, // Animate the path data
+                    duration: fixedWedgeAnimationDurationMs,
                     easing: animeEasing
                 });
             } else {
@@ -931,9 +944,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentGroupOuterRadius = parseFloat(group.dataset.originalOuterRadius);
                  if(isNaN(currentGroupOuterRadius)){ console.warn("Skipping scale back for group with invalid radius", group.dataset.service); return; }
 
-                const durationRatio = (maxPossibleOuterRadius > 0) ? Math.min(1, currentGroupOuterRadius / maxPossibleOuterRadius) : 1;
-                const dynamicDuration = maxDurationSeconds * Math.max(0.1, durationRatio);
-
                 // Animate wedge path back to original state
                 const currentPath = group.querySelector('.wedge-path');
                 const originalD_current = group.dataset.originalPath;
@@ -941,7 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     anime({
                         targets: currentPath,
                         d: originalD_current,
-                        duration: dynamicDuration * 1000,
+                        duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                         easing: animeEasing
                     });
                 }
@@ -954,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         targets: currentMarker,
                         cx: originalMX_current,
                         cy: originalMY_current,
-                        duration: dynamicDuration * 1000,
+                        duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
                         easing: animeEasing
                     });
                 }
@@ -962,11 +972,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (labelGroup && !isNaN(originalMX_current) && !isNaN(originalMY_current)) {
                     const originalMarkerCenterPos = { x: parseFloat(originalMX_current), y: parseFloat(originalMY_current) };
                     const originalLineStartPoint = calculateLineStartPoint(originalMarkerCenterPos); // Use helper
+                    const labelCenterX = parseFloat(labelGroup.dataset.centerX || '0');
+                    const labelCenterY = parseFloat(labelGroup.dataset.centerY || '0');
+                    
+                    // Create original curved path
+                    const originalPathData = createCurvedPath(
+                        originalLineStartPoint.x,
+                        originalLineStartPoint.y,
+                        labelCenterX,
+                        labelCenterY
+                    );
+                    
                     anime({
                         targets: labelGroup.querySelector('.label-line'),
-                        x1: originalLineStartPoint.x, 
-                        y1: originalLineStartPoint.y, 
-                        duration: dynamicDuration * 1000,
+                        d: originalPathData, // Animate the path data
+                        duration: fixedWedgeAnimationDurationMs,
                         easing: animeEasing
                     });
                 }
@@ -986,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          anime({
                              targets: [boxToReset, textToReset], // Target BOTH box and text
                              transform: targetTransform, // Use consistent transform pattern
-                             duration: dynamicDuration * 1000, 
+                             duration: fixedTextAnimationDurationMs, // Use FIXED duration for text boxes
                              easing: animeEasing
                          });
                      }
