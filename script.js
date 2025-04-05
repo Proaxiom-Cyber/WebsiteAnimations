@@ -6,16 +6,65 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     console.log("Anime.js loaded."); // Confirm library presence
 
-    const services = [
-        { name: "Cyber Strategy & Executive Risk" }, { name: "Security Assessment & Architecture" },
-        { name: "Governance, Risk & Compliance (GRC)" }, { name: "Privacy, Identity & Trust" },
-        { name: "Offensive Security" }, { name: "Managed Cyber Programs" },
-        { name: "Cybersecurity Innovation" }
-    ];
+    // Import services data
+    import('./services-data.js')
+        .then(module => {
+            const services = module.services;
+            const serviceConfig = module.config;
+            console.log(`Loaded ${services.length} services from external file`);
+            
+            // Initialize the chart with the imported data
+            initializeRadialChart(services, serviceConfig);
+        })
+        .catch(error => {
+            console.error('Error loading services data:', error);
+            // Fallback to hardcoded services if import fails
+            const fallbackServices = [
+                { name: "Service 1" }, { name: "Service 2" },
+                { name: "Service 3" }, { name: "Service 4" }
+            ];
+            console.warn('Using fallback services due to import error');
+            initializeRadialChart(fallbackServices, {
+                minLengthFactor: 0.4,
+                maxLengthFactor: 1.0,
+                labelHoverScale: 1.8,
+                textShrinkScale: 0.8,
+                animationDuration: 0.33,
+                colors: {
+                    primary: [
+                        '#75c9b9', // Mint
+                        '#2aa1b9', // Turquoise
+                        '#4c8e9a', // Teal
+                        '#f16867', // Salmon
+                        '#094054'  // Indigo
+                    ],
+                    secondary: [
+                        '#588D91', // Muted teal
+                        '#EB7D7A', // Warm salmon
+                        '#5D9AA3', // Cool cyan-teal
+                        '#DD5D5C', // Strong red-salmon
+                        '#93BCC0', // Pale aqua
+                        '#D99D98'  // Softer coral
+                    ]
+                },
+                getAllColors: function() {
+                    return [...this.colors.primary, ...this.colors.secondary];
+                },
+                getPrimaryColors: function() {
+                    return [...this.colors.primary];
+                }
+            });
+        });
+});
 
+// Move the main chart initialization into a function
+function initializeRadialChart(services, serviceConfig) {
     // Config
-    const minLengthFactor = 0.4; // Relative to space *outside* the visual center circle
-    const maxLengthFactor = 1.0;
+    const minLengthFactor = serviceConfig.minLengthFactor || 0.4; // Relative to space *outside* the visual center circle
+    const maxLengthFactor = serviceConfig.maxLengthFactor || 1.0;
+    const labelHoverScale = serviceConfig.labelHoverScale || 1.8; // How much the active label grows
+    const textShrinkScale = serviceConfig.textShrinkScale || 0.8; // Shrink inactive text labels
+    const configuredAnimationDuration = serviceConfig.animationDuration || 0.5; // Animation duration from config
 
     // Get Elements & Constants
     const svg = document.getElementById('radial-chart-svg');
@@ -80,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hoverOuterRadius = visualInnerRadius + (maxAvailableRadialSpace * hoverMaxLengthFactor);
 
     // Get animation timing from CSS
-    const maxDurationSeconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--max-animation-duration')) || 0.5; // Ensure this matches style.css
+    const maxDurationSeconds = configuredAnimationDuration || parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--max-animation-duration')) || 0.5; // Use config value first
     const timingFunction = getComputedStyle(document.documentElement).getPropertyValue('--animation-timing-function').trim() || 'ease-out';
     const shrinkScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hover-shrink-scale')) || 0.95;
     
@@ -140,13 +189,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    const wedgeColorVarsMaster = getComputedStyle(document.documentElement)
-        .getPropertyValue('--wedge-colors')?.split(',').map(c => c.trim()).filter(c => c) || []; // Add fallback
-
-    if (wedgeColorVarsMaster.length === 0) {
-        console.error("FATAL: No wedge colors defined or found in CSS (--wedge-colors).");
-        return; // Stop if no colors
+    // Get colors from config
+    let primaryColors = [];
+    let secondaryColors = [];
+    let allColors = [];
+    
+    // Check if we have color functions in config
+    if (serviceConfig.getPrimaryColors && typeof serviceConfig.getPrimaryColors === 'function') {
+        try {
+            primaryColors = serviceConfig.getPrimaryColors();
+            console.log(`Loaded ${primaryColors.length} primary colors`);
+        } catch (e) {
+            console.warn('Error getting primary colors', e);
+        }
+    } else if (serviceConfig.colors && serviceConfig.colors.primary) {
+        // Direct access if functions not available
+        primaryColors = [...serviceConfig.colors.primary];
     }
+    
+    // Fallback for primary colors
+    if (!primaryColors.length) {
+        primaryColors = [
+            '#75c9b9', // Mint
+            '#2aa1b9', // Turquoise
+            '#4c8e9a', // Teal
+            '#f16867', // Salmon
+            '#094054'  // Indigo
+        ];
+    }
+    
+    // Get all colors if available
+    if (serviceConfig.getAllColors && typeof serviceConfig.getAllColors === 'function') {
+        try {
+            allColors = serviceConfig.getAllColors();
+            // Secondary colors are all colors that aren't primary
+            secondaryColors = allColors.filter(color => !primaryColors.includes(color));
+            console.log(`Loaded ${allColors.length} total colors (${primaryColors.length} primary, ${secondaryColors.length} secondary)`);
+        } catch (e) {
+            console.warn('Error getting all colors', e);
+            // If getting all colors fails, use just primary colors
+            allColors = [...primaryColors];
+            secondaryColors = [];
+        }
+    } else if (serviceConfig.colors && serviceConfig.colors.secondary) {
+        // Direct access if functions not available
+        secondaryColors = [...serviceConfig.colors.secondary];
+        allColors = [...primaryColors, ...secondaryColors];
+    } else {
+        // Fallback if no secondary colors defined
+        allColors = [...primaryColors];
+        secondaryColors = [];
+    }
+    
+    // Determine whether to use primary colors only or all colors
+    // You can change this to primaryColors to use only primary
+    const colorsToUse = allColors;
+    
+    console.log("Using prioritized brand colors for chart elements");
 
     const numServices = services.length;
     if (numServices === 0) {
@@ -194,23 +293,98 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Assign Colors
     const assignedColors = new Array(numServices);
-    let availableColors = shuffleArray([...wedgeColorVarsMaster]);
+    
+    // Create separate pools for primary and secondary colors
+    let availablePrimaryColors = [...primaryColors]; 
+    let availableSecondaryColors = [...secondaryColors];
     let lastAssignedColor = null;
-    for (let i = 0; i < numServices; i++) { /* ... Color assignment logic (same as before) ... */
-        let chosenColor = null; let chosenIndex = -1;
-        for (let j = 0; j < availableColors.length; j++) { if (availableColors[j] !== lastAssignedColor || availableColors.length === 1) { chosenIndex = j; break; } }
-        if (chosenIndex === -1 && availableColors.length > 0) { chosenIndex = 0; }
-        if (chosenIndex !== -1) { chosenColor = availableColors.splice(chosenIndex, 1)[0]; }
-        else {
-            availableColors = shuffleArray([...wedgeColorVarsMaster]); chosenIndex = -1;
-            for (let j = 0; j < availableColors.length; j++) { if (availableColors[j] !== lastAssignedColor || availableColors.length === 1) { chosenIndex = j; break; } }
-            if (chosenIndex !== -1) { chosenColor = availableColors.splice(chosenIndex, 1)[0]; }
-            else if (availableColors.length > 0) { chosenColor = availableColors.splice(0, 1)[0]; }
-            else { chosenColor = "#CCCCCC"; console.error("Critical Error assigning color."); }
+    
+    console.log(`Color assignment: ${numServices} services, ${availablePrimaryColors.length} primary colors, ${availableSecondaryColors.length} secondary colors`);
+    
+    for (let i = 0; i < numServices; i++) {
+        let chosenColor = null;
+        
+        // STEP 1: Try to use a primary color if any are available
+        if (availablePrimaryColors.length > 0) {
+            console.log(`Service ${i+1}: Using primary colors (${availablePrimaryColors.length} remaining)`);
+            
+            // Get primary colors that aren't the same as the last used color
+            const availableNonAdjacent = availablePrimaryColors.filter(color => color !== lastAssignedColor);
+            
+            if (availableNonAdjacent.length > 0) {
+                // Use any primary color that's not adjacent
+                const index = Math.floor(Math.random() * availableNonAdjacent.length);
+                chosenColor = availableNonAdjacent[index];
+            } else if (availablePrimaryColors.length > 0) {
+                // If all remaining primaries would be adjacent, just take any primary
+                const index = Math.floor(Math.random() * availablePrimaryColors.length);
+                chosenColor = availablePrimaryColors[index];
+            }
+            
+            // Remove the chosen color from the primary pool
+            const chosenIndex = availablePrimaryColors.indexOf(chosenColor);
+            if (chosenIndex !== -1) {
+                availablePrimaryColors.splice(chosenIndex, 1);
+            }
         }
-        assignedColors[i] = chosenColor; lastAssignedColor = chosenColor;
+        // STEP 2: If no primary colors left, use secondary colors
+        else if (availableSecondaryColors.length > 0) {
+            console.log(`Service ${i+1}: Using secondary colors (${availableSecondaryColors.length} remaining)`);
+            
+            // Get secondary colors that aren't the same as the last used color
+            const availableNonAdjacent = availableSecondaryColors.filter(color => color !== lastAssignedColor);
+            
+            if (availableNonAdjacent.length > 0) {
+                // Use any secondary color that's not adjacent
+                const index = Math.floor(Math.random() * availableNonAdjacent.length);
+                chosenColor = availableNonAdjacent[index];
+            } else if (availableSecondaryColors.length > 0) {
+                // If all remaining secondaries would be adjacent, just take any secondary
+                const index = Math.floor(Math.random() * availableSecondaryColors.length);
+                chosenColor = availableSecondaryColors[index];
+            }
+            
+            // Remove the chosen color from the secondary pool
+            const chosenIndex = availableSecondaryColors.indexOf(chosenColor);
+            if (chosenIndex !== -1) {
+                availableSecondaryColors.splice(chosenIndex, 1);
+            }
+        }
+        // STEP 3: If all colors are used, replenish but don't repeat the last used color
+        else {
+            console.log(`Service ${i+1}: Replenishing colors (all were used)`);
+            
+            // Replenish primary colors first (excluding the last color used)
+            availablePrimaryColors = [...primaryColors].filter(color => color !== lastAssignedColor);
+            
+            // If there are no usable primary colors, check secondary colors
+            if (availablePrimaryColors.length === 0) {
+                availableSecondaryColors = [...secondaryColors].filter(color => color !== lastAssignedColor);
+                
+                if (availableSecondaryColors.length > 0) {
+                    const index = Math.floor(Math.random() * availableSecondaryColors.length);
+                    chosenColor = availableSecondaryColors[index];
+                    availableSecondaryColors.splice(index, 1);
+                } else {
+                    // Emergency fallback - should never reach here unless there's only one color total
+                    console.error("Critical error: No colors available after replenishing");
+                    chosenColor = primaryColors[0] || "#75c9b9"; // Use first primary color or mint as fallback
+                }
+            } else {
+                // Use a primary color after replenishing
+                const index = Math.floor(Math.random() * availablePrimaryColors.length);
+                chosenColor = availablePrimaryColors[index];
+                availablePrimaryColors.splice(index, 1);
+            }
+        }
+        
+        // Assign the chosen color
+        assignedColors[i] = chosenColor;
+        lastAssignedColor = chosenColor;
+        console.log(`Assigned ${chosenColor} to service ${i+1}`);
     }
-     // console.log("Assigned Colors:", assignedColors); // Debug Log
+
+    console.log("Final color assignments:", assignedColors);
 
 
     // --- Helper Functions ---
@@ -745,8 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Animate all groups (shrink inactive, ensure active is scale 1)
-            const labelHoverScale = 1.8; // How much the active label grows (80% increase)
-            const textShrinkScale = 0.8; // Shrink inactive text labels for better contrast
+            // Use values from config instead of hardcoded values
             wedgeGroups.forEach(group => {
                  // Stop any previous scaling animation on the group
                  anime.remove(group); // Remove only scaling from others
@@ -1034,4 +1207,4 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Center logo element not found or calculation error during logo placement.");
      }
 
-}); // End DOMContentLoaded
+}
