@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Portfolio Chart (Anime.js Smooth)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="chart-container" role="img" aria-label="Service Portfolio Radial Chart">
+        <svg id="radial-chart-svg" viewBox="0 0 400 400" width="500" height="500">
+            <defs></defs>
+            <g id="all-wedges-group"></g>
+            <circle id="center-circle-visual" cx="200" cy="200" r="50" fill="#ffffff" />
+            <image id="center-logo" href="./assets/ProaxiomSubmark.svg"
+                   x="170" y="170" height="60" width="60" />
+        </svg>
+        <div class="tooltip"></div>
+    </div>
+
+    <!-- Include Anime.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+    <!-- Your script -->
+    <script src="script.js"></script>
+</body>
+</html>

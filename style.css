@@ -1,0 +1,140 @@
+:root {
+  /* Colors */
+  --color-indigo: #094054;
+  --color-teal: #4c8e9a;
+  --color-iris-blue: #2aa1b9;
+  --color-mint: #75c9b9;
+  --color-salmon: #f16867;
+  --color-cotton: #e5e3d6;
+  --color-sky-blue: #a5d6da;
+  --color-peppermint: #beebdb;
+
+  --color-white: #ffffff;
+  --color-border: var(--color-white); /* White border for wedges/markers */
+  --color-background: #f0f0f0;
+
+  /* Color pool for wedges */
+  --wedge-colors:
+      var(--color-cotton),
+      var(--color-sky-blue),
+      var(--color-peppermint),
+      var(--color-indigo),
+      var(--color-teal),
+      var(--color-iris-blue),
+      var(--color-mint),
+      var(--color-salmon);
+
+  /* Chart dimensions */
+  --svg-viewbox-size: 400; /* Internal coordinate system size */
+  --center-circle-visual-radius: 50; /* Visual hole radius */
+  --wedge-border-width: 2.5; /* Stroke width for wedges */
+  --marker-radius: 7; /* Radius of marker circles */
+  --marker-border-width: 2; /* Stroke width for markers */
+  --hover-shrink-scale: 0.95; /* Target scale factor for inactive wedges on hover */
+  --marker-arc-offset-factor: 0.8; /* Position of marker along arc (0=start, 1=end) */
+  --logo-size-factor: 0.6; /* Logo size relative to center circle diameter */
+  --hover-max-length-factor: 1.1; /* Target length factor for active wedge (relative to max space) */
+
+  /* Animation Timing (Base duration for largest element) */
+  --max-animation-duration: 0.8s; /* Base duration for full size element scaling */
+  --animation-timing-function: ease-out; /* Easing function for scaling */
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: var(--color-background);
+  font-family: sans-serif;
+  /* Ensure enough space around SVG for hover effects */
+  padding: 60px;
+  box-sizing: border-box; /* Include padding in body dimensions */
+  margin: 0; /* Remove default body margin */
+}
+
+.chart-container {
+  position: relative; /* For tooltip positioning */
+  line-height: 0; /* Prevent extra space below SVG */
+}
+
+#radial-chart-svg {
+  display: block; /* Ensure it behaves like a block element */
+  /* Allow elements (like scaled wedges) to render outside the nominal SVG bounds */
+  overflow: visible;
+  max-width: 100%; /* Ensure responsiveness within container */
+  height: auto; /* Maintain aspect ratio */
+}
+
+/* Group containing wedge path and marker circle */
+.wedge-group {
+  cursor: pointer;
+  /* Set origin for scaling transformations to the SVG center */
+  transform-origin: center center;
+  /* Default state - no scaling */
+  transform: scale(1);
+  /* Transition for scaling applied dynamically via JS (anime.js) */
+  /* NO transition property here */
+}
+
+/* JS (anime.js) will handle applying transforms and transitions directly */
+/* NO CSS rules needed for .is-hovering or .is-active scaling */
+
+
+/* Style for the wedge path shape */
+.wedge-path {
+  stroke: var(--color-border); /* White outline */
+  stroke-width: var(--wedge-border-width); /* Thickness of outline */
+  stroke-linejoin: round; /* Smoother corners */
+  /* Ensure stroke is painted on top of the fill */
+  paint-order: stroke;
+}
+
+/* Style for the marker circle */
+.marker-circle {
+  stroke: var(--color-border); /* White outline */
+  stroke-width: var(--marker-border-width); /* Thickness of outline */
+  pointer-events: none; /* Prevent marker from interfering with wedge hover */
+  /* Ensure stroke is painted on top of the fill */
+  paint-order: stroke;
+}
+
+/* Style for the visual center circle (white circle) */
+#center-circle-visual {
+  /* Add subtle shadow for depth */
+  filter: drop-shadow(0px 1px 3px rgba(0,0,0,0.25));
+  /* Drawn after wedges in SVG source, so naturally on top */
+}
+
+/* Style for the center logo image */
+#center-logo {
+  pointer-events: none; /* Prevent logo from interfering */
+  /* Drawn after center circle in SVG source, so on top */
+}
+
+/* Style for the tooltip */
+.tooltip {
+  position: absolute; /* Position relative to chart-container */
+  background-color: rgba(0, 0, 0, 0.8); /* Dark background */
+  color: white; /* Light text */
+  padding: 6px 12px; /* Padding inside tooltip */
+  border-radius: 5px; /* Rounded corners */
+  font-size: 13px; /* Text size */
+  white-space: nowrap; /* Prevent text wrapping */
+  opacity: 0; /* Hidden by default */
+  visibility: hidden; /* Hidden by default */
+  /* Smooth fade-in/out transition */
+  transition: opacity 0.2s ease-out, visibility 0.2s ease-out;
+  pointer-events: none; /* Doesn't block mouse events */
+  z-index: 10; /* Ensure tooltip is above SVG */
+  /* Default position above the chart */
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-15px); /* Center horizontally, slight offset up */
+}
+
+/* Style for the tooltip when it's active */
+.chart-container:hover .tooltip.active {
+  opacity: 1; /* Make visible */
+  visibility: visible; /* Make accessible */
+}
