@@ -26,18 +26,33 @@
 
   /* Chart dimensions */
   --svg-viewbox-size: 400; /* Internal coordinate system size */
-  --center-circle-visual-radius: 50; /* Visual hole radius */
+  --center-circle-visual-radius: 50; /* Visual inner radius */
   --wedge-border-width: 2.5; /* Stroke width for wedges */
-  --marker-radius: 7; /* Radius of marker circles */
+  --marker-radius: 7;
   --marker-border-width: 2; /* Stroke width for markers */
-  --hover-shrink-scale: 0.95; /* Target scale factor for inactive wedges on hover */
-  --marker-arc-offset-factor: 0.8; /* Position of marker along arc (0=start, 1=end) */
+  --hover-shrink-scale: 0.95; /* How much inactive wedges shrink */
+  --marker-arc-offset-factor: 0.8; /* How far along the arc the marker is (0=start, 1=end) */
+  --hover-max-length-factor: 1.05; /* How much further the wedge grows on hover (relative to max space) */
   --logo-size-factor: 0.6; /* Logo size relative to center circle diameter */
-  --hover-max-length-factor: 1.1; /* Target length factor for active wedge (relative to max space) */
+  --max-animation-duration: 0.5s; /* Base duration for longest wedge */
+  --animation-timing-function: ease-out; /* e.g., ease, ease-in, ease-out, linear */
 
-  /* Animation Timing (Base duration for largest element) */
-  --max-animation-duration: 0.8s; /* Base duration for full size element scaling */
-  --animation-timing-function: ease-out; /* Easing function for scaling */
+  /* Label Styling */
+  --label-offset: 70; /* Distance labels are placed beyond the max wedge radius (increased again) */
+  --label-text-size: 12px; /* Font size for labels (increased size) */
+  --label-line-color: #777; /* Color of the dotted line */
+  --label-line-stroke-width: 2px; /* Thickness of the dotted line */
+  --label-text-color: #444; /* Color of the label text */
+
+  /* Label Box Styling */
+  --label-box-fill: #666666; /* Lighter grey background */
+  --label-box-stroke: #ffffff; /* White border */
+  --label-box-stroke-width: 1px;
+  --label-box-padding: 5px; /* Padding around text */
+  --label-box-rx: 3px; /* Rounded corners */
+  --label-max-box-width: 150px; /* Maximum width for label boxes before wrapping */
+
+  /* Dynamic Wedge Colors (Provide at least as many colors as services, or they will repeat) */
 }
 
 body {
@@ -101,8 +116,9 @@ body {
 
 /* Style for the visual center circle (white circle) */
 #center-circle-visual {
-  /* Add subtle shadow for depth */
-  filter: drop-shadow(0px 1px 3px rgba(0,0,0,0.25));
+  /* Add directional shadow for depth */
+  filter: drop-shadow(-3px -3px 4px rgba(0,0,0,0.15)) 
+          drop-shadow(4px 4px 6px rgba(0,0,0,0.5));
   /* Drawn after wedges in SVG source, so naturally on top */
 }
 
@@ -137,4 +153,11 @@ body {
 .chart-container:hover .tooltip.active {
   opacity: 1; /* Make visible */
   visibility: visible; /* Make accessible */
+}
+
+/* Style for the service label text */
+.label-text {
+  font-family: 'Poppins', sans-serif; /* Use Poppins font */
+  font-weight: 700; /* Bold weight */
+  pointer-events: none; /* Prevent text from capturing mouse events */
 }

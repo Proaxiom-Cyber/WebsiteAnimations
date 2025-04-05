@@ -23,9 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const centerCircleVisual = document.getElementById('center-circle-visual');
     const centerLogo = document.getElementById('center-logo');
     const tooltip = document.querySelector('.tooltip');
+    const labelsGroup = document.getElementById('labels-and-lines-group'); // Get the new group
 
     // Basic element existence check
-    if (!svg || !allWedgesGroup || !centerCircleVisual || !centerLogo || !tooltip) {
+    if (!svg || !allWedgesGroup || !centerCircleVisual || !centerLogo || !tooltip || !labelsGroup) { // Check new group too
         console.error("FATAL: Essential DOM/SVG elements not found. Check HTML IDs.");
         return; // Stop execution if elements are missing
     }
@@ -56,20 +57,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const markerRadius = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--marker-radius')) || 7;
     const markerArcOffsetFactor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--marker-arc-offset-factor')) || 0.8;
-    const hoverMaxLengthFactor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hover-max-length-factor')) || 1.1; // Get max hover factor
+    const hoverMaxLengthFactor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hover-max-length-factor')) || 1.05; // Get max hover factor (ensure this matches style.css)
+
+    // Get Label Style Variables from CSS
+    const labelOffset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-offset')) || 30;
+    const labelTextSize = getComputedStyle(document.documentElement).getPropertyValue('--label-text-size') || '12px'; // Ensure this matches style.css
+    const labelLineColor = getComputedStyle(document.documentElement).getPropertyValue('--label-line-color') || '#777';
+    const labelTextColor = getComputedStyle(document.documentElement).getPropertyValue('--label-text-color') || '#444'; // Original text color before putting in box
+    const labelLineStrokeWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-line-stroke-width')) || 1;
+    const labelDashArray = "3, 3"; // Dotted line style
+
+    // Get Label Box Style Variables from CSS
+    const labelBoxFill = getComputedStyle(document.documentElement).getPropertyValue('--label-box-fill') || '#666666'; // Ensure this matches style.css
+    const labelBoxStroke = getComputedStyle(document.documentElement).getPropertyValue('--label-box-stroke') || '#ffffff';
+    const labelBoxStrokeWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-box-stroke-width')) || 1;
+    const labelBoxPadding = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-box-padding')) || 5;
+    const labelBoxRx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-box-rx')) || 3;
+    const labelMaxBoxWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--label-max-box-width')) || 150; // Get max width
+
 
     // Calculate fixed hover outer radius (target radius for active wedge)
     const hoverOuterRadius = visualInnerRadius + (maxAvailableRadialSpace * hoverMaxLengthFactor);
 
     // Get animation timing from CSS
-    const maxDurationSeconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--max-animation-duration')) || 0.8;
+    const maxDurationSeconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--max-animation-duration')) || 0.5; // Ensure this matches style.css
     const timingFunction = getComputedStyle(document.documentElement).getPropertyValue('--animation-timing-function').trim() || 'ease-out';
     const shrinkScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hover-shrink-scale')) || 0.95;
 
     // Easing Map
     const easingMap = { 'ease': 'easeOutQuad', 'ease-in': 'easeInQuad', 'ease-out': 'easeOutQuad', 'ease-in-out': 'easeInOutQuad', 'linear': 'linear' };
     const animeEasing = easingMap[timingFunction] || 'easeOutQuad'; // Fallback
-    const animationDurationMs = maxDurationSeconds * 1000; // Base duration in MS
+    // const animationDurationMs = maxDurationSeconds * 1000; // Base duration in MS (Calculated dynamically later)
+
+    // --- Contrast Color Helper ---
+    function getContrastColor(colorString) {
+        let computedColor = colorString;
+
+        // Check if it's a CSS variable
+        if (colorString.startsWith('var(')) {
+            const varName = colorString.match(/--[\w-]+/)[0];
+            if (varName) {
+                computedColor = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+            }
+        }
+
+        // Now resolve the computed color (could be hex, rgb, named color)
+        // Create a temporary element to let the browser parse the color
+        const tempDiv = document.createElement('div');
+        tempDiv.style.color = computedColor;
+        document.body.appendChild(tempDiv); // Needs to be in DOM for getComputedStyle
+        const finalColor = getComputedStyle(tempDiv).color;
+        document.body.removeChild(tempDiv);
+
+        // Parse RGB values from the computed style (e.g., "rgb(r, g, b)")
+        const rgbMatch = finalColor.match(/\((\d+),\s*(\d+),\s*(\d+)/);
+        if (!rgbMatch) {
+            console.warn(`Could not parse RGB from color: ${colorString} -> ${computedColor} -> ${finalColor}. Defaulting to black text.`);
+            return '#000000'; // Default fallback
+        }
+
+        const r = parseInt(rgbMatch[1]);
+        const g = parseInt(rgbMatch[2]);
+        const b = parseInt(rgbMatch[3]);
+
+        // Calculate relative luminance (standard formula)
+        const RsRGB = r / 255;
+        const GsRGB = g / 255;
+        const BsRGB = b / 255;
+
+        const R = (RsRGB <= 0.03928) ? RsRGB / 12.92 : Math.pow(((RsRGB + 0.055) / 1.055), 2.4);
+        const G = (GsRGB <= 0.03928) ? GsRGB / 12.92 : Math.pow(((GsRGB + 0.055) / 1.055), 2.4);
+        const B = (BsRGB <= 0.03928) ? BsRGB / 12.92 : Math.pow(((BsRGB + 0.055) / 1.055), 2.4);
+
+        const luminance = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+
+        // Determine contrast color based on luminance threshold (0.5 is common)
+        return luminance > 0.5 ? '#000000' : '#ffffff';
+    }
 
 
     const wedgeColorVarsMaster = getComputedStyle(document.documentElement)
@@ -203,10 +267,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return pathString;
     }
 
+    // --- Calculate Offset Line Start Point ---
+    function calculateLineStartPoint(markerPos) {
+        const angleRad = Math.atan2(markerPos.y - center, markerPos.x - center);
+        const startX = markerPos.x + (markerRadius + 2) * Math.cos(angleRad);
+        const startY = markerPos.y + (markerRadius + 2) * Math.sin(angleRad);
+        return { x: startX, y: startY };
+    }
 
     // Store all wedge group elements
     const wedgeGroups = [];
     const maxPossibleOuterRadius = visualInnerRadius + (maxAvailableRadialSpace * 1.0);
+    const labelData = []; // Array to store data for second pass
+    let maxWidth = 0;
+    let maxHeight = 0; // This will now store max *line* height
 
     // --- LOGGING BEFORE LOOP ---
     console.log(`Starting main services loop. Number of services: ${numServices}, Length Factors count: ${lengthFactors.length}, Colors count: ${assignedColors.length}`);
@@ -221,14 +295,62 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- END LOGGING ---
 
 
-    // --- Create SVG Elements ---
+    // --- Text Splitting Helper ---
+    function splitTextIntoLines(text, maxWidthPx, fontSize) {
+        // Basic approximation: character width (can be improved with canvas measurement)
+        // For Poppins bold at 12px, estimate average char width (adjust as needed)
+        const avgCharWidthFactor = 0.65; 
+        const maxCharsPerLine = Math.floor(maxWidthPx / (parseFloat(fontSize) * avgCharWidthFactor));
+        
+        if (maxCharsPerLine <= 0) return [text]; // Avoid infinite loops
+
+        const words = text.split(/\s+/);
+        const lines = [];
+        let currentLine = '';
+
+        words.forEach(word => {
+            if (currentLine.length === 0) {
+                currentLine = word;
+            } else {
+                const testLine = currentLine + ' ' + word;
+                 // Use character count as proxy for width check (simplification)
+                if (testLine.length <= maxCharsPerLine) {
+                    currentLine = testLine;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+             // Handle very long words that exceed maxCharsPerLine on their own
+             if (currentLine.length > maxCharsPerLine && !currentLine.includes(' ')) {
+                 // Simple split, could be smarter (hyphenation?)
+                 lines.push(currentLine.substring(0, maxCharsPerLine));
+                 currentLine = currentLine.substring(maxCharsPerLine);
+                 // Keep pushing parts of the long word if needed
+                 while(currentLine.length > maxCharsPerLine) {
+                    lines.push(currentLine.substring(0, maxCharsPerLine));
+                    currentLine = currentLine.substring(maxCharsPerLine);
+                 }
+             }
+        });
+
+        if (currentLine.length > 0) {
+            lines.push(currentLine);
+        }
+
+        // console.log(`Splitting "${text}" (max ${maxCharsPerLine} chars):`, lines); // Debug
+        return lines;
+    }
+
+
+    // --- Create SVG Elements (Pass 1: Measure Text) ---
     services.forEach((service, index) => {
         // --- LOGGING INSIDE LOOP (FIRST THING) ---
-        console.log(`Entering loop for index ${index}, service: ${service.name}`);
+        console.log(`Entering loop (Pass 1) for index ${index}, service: ${service.name}`);
         // --- END LOGGING ---
         try {
             const startAngle = index * anglePerWedge;
-            const endAngle = startAngle + anglePerWedge;
+            const endAngle = startAngle + anglePerWedge + 0.05; // Add minimal overlap for anti-aliasing
             const lengthFactor = lengthFactors[index]; // Potential error if lengthFactors is wrong size
             const wedgeColor = assignedColors[index]; // Potential error if assignedColors is wrong size
 
@@ -273,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wedgeGroup.dataset.endAngle = endAngle;
             wedgeGroup.dataset.markerAngle = markerAngle;
             wedgeGroup.dataset.originalOuterRadius = originalOuterRadius;
+            wedgeGroup.dataset.index = index; // Store index for easy lookup
 
 
             // Create Path
@@ -280,6 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
             path.setAttribute("d", originalPathData);
             path.classList.add('wedge-path');
             path.setAttribute("fill", wedgeColor);
+            // path.setAttribute("filter", "url(#wedge-shadow)"); // Temporarily remove shadow filter
+            // path.setAttribute("stroke", wedgeColor); // REMOVE stroke matching fill
+            // path.setAttribute("stroke-width", "1"); // REMOVE stroke width
 
 
             // Create Marker
@@ -291,23 +417,219 @@ document.addEventListener('DOMContentLoaded', () => {
             marker.classList.add('marker-circle');
 
 
-            // Append
+            // --- Create & Measure Text (Temporarily) ---
+            const midAngle = startAngle + anglePerWedge / 2;
+            const labelRadius = maxPossibleOuterRadius + labelOffset; // Position for the *text* anchor
+            const labelPos = polarToCartesian(center, center, labelRadius, midAngle);
+
+            // Determine text anchor based on angle
+            let textAnchor = 'middle';
+            const tolerance = 5; // Degrees tolerance for top/bottom alignment
+            if (midAngle > tolerance && midAngle < 180 - tolerance) {
+                textAnchor = 'start'; // Right side
+            } else if (midAngle > 180 + tolerance && midAngle < 360 - tolerance) {
+                textAnchor = 'end'; // Left side
+            }
+
+            // Create Text (but don't append permanently yet)
+            const labelText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            labelText.setAttribute('x', labelPos.x); // Temporary position for measurement
+            labelText.setAttribute('y', labelPos.y);
+            // NO dy adjustment here before measuring
+            labelText.setAttribute('text-anchor', textAnchor);
+            labelText.setAttribute('fill', labelTextColor); // Use temporary color for measurement if needed
+            labelText.setAttribute('font-size', labelTextSize);
+            labelText.classList.add('label-text'); // Apply class for styling (font)
+            // labelText.textContent = service.name; // REMOVED - will use tspans
+
+            // --- Split Text into Lines ---
+            const maxTextWidthForSplit = labelMaxBoxWidth - (2 * labelBoxPadding);
+            const lines = splitTextIntoLines(service.name, maxTextWidthForSplit, labelTextSize);
+
+            // --- Measure based on longest line / number of lines ---
+            let currentMaxLineWidth = 0;
+            let singleLineHeight = 0;
+            
+             // Temporarily add text with first line to measure line height / longest line width
+             if (lines.length > 0) {
+                labelText.textContent = lines[0]; // Use first line for single line height estimate
+                svg.appendChild(labelText);
+                const tempBbox = labelText.getBBox();
+                singleLineHeight = tempBbox.height; // Get height of a single line
+                svg.removeChild(labelText);
+                labelText.textContent = ''; // Clear it again
+                
+                 // Now measure width of each potential line (using temp append)
+                 lines.forEach(line => {
+                     labelText.textContent = line;
+                     svg.appendChild(labelText);
+                     currentMaxLineWidth = Math.max(currentMaxLineWidth, labelText.getBBox().width);
+                     svg.removeChild(labelText);
+                     labelText.textContent = '';
+                 });
+             }
+            
+             maxWidth = Math.max(maxWidth, currentMaxLineWidth); // Update overall max width based on longest single line
+             maxHeight = Math.max(maxHeight, singleLineHeight); // Update max single line height
+
+            // Store data needed for Pass 2
+            labelData.push({
+                index: index,
+                // textElement: labelText, // Store the created text element (we'll create tspans later)
+                 lines: lines, // Store the array of lines
+                 numLines: lines.length, // Store how many lines this label has
+                originalMarkerPos: originalMarkerPos,
+                labelPos: labelPos,     // Anchor point for the text block
+                textAnchor: textAnchor, // Still needed for initial box placement calculation
+                // bboxWidth: bbox.width, // No longer storing full bbox width/height
+                // bboxHeight: bbox.height, 
+                singleLineHeight: singleLineHeight, // Store measured single line height
+                wedgeColor: wedgeColor // Store the wedge color
+            });
+
+            // Append wedge group (path and marker only in this pass)
             wedgeGroup.appendChild(path);
             wedgeGroup.appendChild(marker);
             allWedgesGroup.appendChild(wedgeGroup); // Appending to the main SVG group
 
             wedgeGroups.push(wedgeGroup); // Add to JS array *only if successful*
 
-            // Event Listeners
+            // Event Listeners (Added in Pass 1)
             wedgeGroup.addEventListener('mouseenter', handleMouseEnter);
             wedgeGroup.addEventListener('mouseleave', handleMouseLeave);
 
         } catch (error) {
-             console.error(`Error during creation of wedge for service index ${index}:`, service.name, error);
+             console.error(`Error during creation of wedge/text measurement for service index ${index}:`, service.name, error);
         }
-    }); // End services.forEach
+    }); // End services.forEach (Pass 1)
 
-    console.log(`Setup complete. Created ${wedgeGroups.length} wedge groups.`); // Log final count
+    console.log(`Pass 1 complete. Max line width: ${maxWidth}, Max single line height: ${maxHeight}`);
+
+    // Calculate uniform box dimensions based on longest line and max number of lines
+    const boxWidth = Math.min(labelMaxBoxWidth, maxWidth + 2 * labelBoxPadding); // Use measured max line width, but cap at CSS max
+    const estimatedLineHeightFactor = 1.2; // Factor for spacing between lines (adjust if needed)
+
+    // --- Create Labels & Lines (Pass 2: Position and Append) ---
+    console.log(`Starting Pass 2: Creating ${labelData.length} label groups. Box W: ${boxWidth} (max)`);
+    labelData.forEach(data => {
+        try {
+            const { index, lines, numLines, originalMarkerPos, labelPos, textAnchor, singleLineHeight, wedgeColor } = data;
+
+            // Calculate this box's specific height
+            const currentBoxHeight = (numLines * singleLineHeight * estimatedLineHeightFactor) + (2 * labelBoxPadding);
+
+            // Create the group for this label set
+            const labelGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            labelGroup.classList.add('label-group', `label-group-${index}`);
+
+            // --- Calculate Box Position ---
+            // Box top-left corner (x, y) needs to be calculated based on text anchor and uniform size
+            let boxX, boxY;
+            if (textAnchor === 'middle') {
+                boxX = labelPos.x - boxWidth / 2;
+            } else if (textAnchor === 'start') {
+                boxX = labelPos.x; // Box starts where text starts
+            } else { // 'end'
+                boxX = labelPos.x - boxWidth; // Box ends where text ends
+            }
+            // Recalculate boxY based on *this* box's height
+            boxY = labelPos.y - currentBoxHeight / 2;
+
+            // Calculate and store box center
+            const boxCenterX = boxX + boxWidth / 2;
+            const boxCenterY = boxY + currentBoxHeight / 2;
+            labelGroup.dataset.centerX = boxCenterX;
+            labelGroup.dataset.centerY = boxCenterY;
+
+            // Create Background Box
+            const labelBox = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            labelBox.setAttribute('x', boxX);
+            labelBox.setAttribute('y', boxY);
+            labelBox.setAttribute('width', boxWidth);
+            labelBox.setAttribute('height', currentBoxHeight);
+            labelBox.setAttribute('fill', wedgeColor); // Use wedge color for box fill
+            labelBox.setAttribute('stroke', labelBoxStroke); // Set border color from CSS var
+            labelBox.setAttribute('stroke-width', labelBoxStrokeWidth); // Set border width from CSS var
+            labelBox.setAttribute('rx', labelBoxRx);
+            labelBox.setAttribute('ry', labelBoxRx);
+            labelBox.classList.add('label-box');
+
+            // Create Line
+            const labelLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            // Calculate angle from center to marker
+            // const lineStartAngleRad = Math.atan2(originalMarkerPos.y - center, originalMarkerPos.x - center); // OLD
+            // Calculate offset start point
+            // const lineStartX = originalMarkerPos.x + (markerRadius + 2) * Math.cos(lineStartAngleRad); // OLD
+            // const lineStartY = originalMarkerPos.y + (markerRadius + 2) * Math.sin(lineStartAngleRad); // OLD
+            const lineStartPoint = calculateLineStartPoint(originalMarkerPos); // Use helper
+            labelLine.setAttribute('x1', lineStartPoint.x); // Use offset start point
+            labelLine.setAttribute('y1', lineStartPoint.y); // Use offset start point
+            // Adjust line endpoint to meet the box edge instead of text anchor
+            // (Simplified: aim line towards box center for now, can refine later if needed)
+            labelLine.setAttribute('x2', boxCenterX);
+            labelLine.setAttribute('y2', boxCenterY);
+            labelLine.setAttribute('stroke', labelLineColor);
+            labelLine.setAttribute('stroke-width', labelLineStrokeWidth);
+            labelLine.setAttribute('stroke-dasharray', labelDashArray);
+            labelLine.classList.add('label-line'); // Keep generic class + index specific on group
+
+            // --- Position Text Inside Box ---
+            // Create the main text element (container for tspans)
+            const textElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            textElement.setAttribute('text-anchor', 'middle'); // Force middle anchor
+            textElement.classList.add('label-text'); // Apply class for styling (font)
+            textElement.setAttribute('font-size', labelTextSize);
+
+            // Calculate starting X and Y for the text block
+            const textX = boxX + boxWidth / 2;
+            // Position the baseline of the first tspan at the vertical center of the box
+             const textY = boxY + currentBoxHeight / 2; 
+            textElement.setAttribute('x', textX);
+            textElement.setAttribute('y', textY); // Set Y for the main text element
+            // textElement.setAttribute('dominant-baseline', 'hanging'); // Use hanging baseline
+            textElement.setAttribute('dominant-baseline', 'middle'); // Align middle of text to Y
+            textElement.setAttribute('fill', getContrastColor(wedgeColor)); // Set contrast text color
+
+             // Add tspan elements for each line, adjusting dy
+             const linesAboveCenter = (numLines - 1) / 2;
+             lines.forEach((line, lineIndex) => {
+                const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                tspan.setAttribute('x', textX); // Ensure each tspan is centered
+                // Set dy for line breaks (0 for first, spacing for others)
+                // const dy = (lineIndex === 0) ? '0' : `${estimatedLineHeightFactor}em`; 
+                
+                let dy = '0';
+                if (lineIndex === 0) {
+                    // Shift the first line up from the center baseline
+                    // Avoid dy="0em" for single lines, explicitly use "0"
+                    if (numLines > 1) {
+                       dy = `${-linesAboveCenter * estimatedLineHeightFactor}em`; 
+                    }
+                } else {
+                    // Subsequent lines have standard spacing relative to the previous line
+                    dy = `${estimatedLineHeightFactor}em`; 
+                }
+
+                tspan.setAttribute('dy', dy);
+                tspan.textContent = line;
+                textElement.appendChild(tspan);
+             });
+
+
+            // Append elements to the group (order matters for layering: line, box, text)
+            labelGroup.appendChild(labelLine);
+            labelGroup.appendChild(labelBox);
+            labelGroup.appendChild(textElement); // Append the stored text element
+
+            // Append the whole group to the main labels container
+            labelsGroup.appendChild(labelGroup);
+
+        } catch(error) {
+            console.error(`Error during Pass 2 for label index ${data.index}:`, error);
+        }
+    });
+
+    console.log(`Pass 2 complete. Added ${labelsGroup.children.length} label groups to the DOM.`);
 
 
     // --- Event Handler Functions (Using Anime.js) ---
@@ -316,6 +638,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const activeGroup = event.currentTarget;
             const activePath = activeGroup.querySelector('.wedge-path');
             const activeMarker = activeGroup.querySelector('.marker-circle');
+            const wedgeIndex = activeGroup.dataset.index;
+            const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
+            const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
 
             // --- Animate ACTIVE wedge shape/marker using Anime.js ---
             const sAngle = parseFloat(activeGroup.dataset.startAngle);
@@ -342,8 +667,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const durationRatioActive = (maxPossibleOuterRadius > 0) ? Math.min(1, activeOriginalRadius / maxPossibleOuterRadius) : 1;
             const dynamicDurationActiveMs = (maxDurationSeconds * Math.max(0.1, durationRatioActive)) * 1000;
 
-            // Stop any existing animation on this element before starting new ones
-            anime.remove([activePath, activeMarker, activeGroup]); // Remove from group too
+            // Stop any existing animation on these elements before starting new ones
+            anime.remove([activePath, activeMarker, activeGroup, activeLabelLine]); // Remove from line too
 
             // console.log(`MouseEnter Active Path: Target d="${hoverPathData.substring(0,30)}...", Duration=${dynamicDurationActiveMs}`); // Debug
             // console.log(`MouseEnter Active Marker: Target cx=${hoverMarkerPos.x}, cy=${hoverMarkerPos.y}, Duration=${dynamicDurationActiveMs}`); // Debug
@@ -363,10 +688,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 easing: animeEasing
             });
 
+            // Animate the label line start point
+            if (activeLabelLine && !isNaN(hoverMarkerPos.x) && !isNaN(hoverMarkerPos.y)) {
+                // Calculate offset hover start point
+                // const hoverLineStartAngleRad = Math.atan2(hoverMarkerPos.y - center, hoverMarkerPos.x - center); // OLD
+                // const hoverLineStartX = hoverMarkerPos.x + (markerRadius + 2) * Math.cos(hoverLineStartAngleRad); // OLD
+                // const hoverLineStartY = hoverMarkerPos.y + (markerRadius + 2) * Math.sin(hoverLineStartAngleRad); // OLD
+                const hoverLineStartPoint = calculateLineStartPoint(hoverMarkerPos); // Use helper
+                anime({
+                    targets: activeLabelLine,
+                    x1: hoverLineStartPoint.x, // Animate offset point
+                    y1: hoverLineStartPoint.y, // Animate offset point
+                    duration: dynamicDurationActiveMs,
+                    easing: animeEasing
+                });
+            } else {
+                 // This might happen briefly during setup, don't log as error unless persistent
+                 // console.warn("Could not find or animate active label line for index:", wedgeIndex);
+            }
+
             // Animate all groups (shrink inactive, ensure active is scale 1)
+            const labelHoverScale = 1.07; // How much the active label grows (Increased)
             wedgeGroups.forEach(group => {
                  // Stop any previous scaling animation on the group
                  anime.remove(group); // Remove only scaling from others
+
+                 const groupIndex = group.dataset.index;
+                 const labelGroup = labelsGroup.querySelector(`.label-group-${groupIndex}`);
+                 if (labelGroup) {
+                    anime.remove(labelGroup); // Remove scaling from label group too
+                 }
 
                  const groupOuterRadius = parseFloat(group.dataset.originalOuterRadius);
                  if (isNaN(groupOuterRadius)) { console.warn("Skipping scale for invalid radius", group.dataset.service); return; }
@@ -374,24 +725,42 @@ document.addEventListener('DOMContentLoaded', () => {
                  const durationRatio = (maxPossibleOuterRadius > 0) ? Math.min(1, groupOuterRadius / maxPossibleOuterRadius) : 1;
                  const dynamicDuration = maxDurationSeconds * Math.max(0.1, durationRatio);
                  let targetScale = shrinkScale;
+                 let labelTargetScale = shrinkScale; // Separate scale for label
 
                  if (group === activeGroup) {
-                     targetScale = 1.0;
+                     targetScale = 1.0; // Active wedge doesn't change scale
+                     labelTargetScale = labelHoverScale; // Active label grows
+                 } else {
+                    targetScale = shrinkScale; // Inactive wedge shrinks
+                    labelTargetScale = shrinkScale; // Inactive label shrinks
                  }
 
                 // console.log(`MouseEnter Scale: Group=${group.dataset.service}, TargetScale=${targetScale}, Duration=${dynamicDuration * 1000}`); // Debug
 
-                 anime({
+                 /* REMOVED Scaling of wedge group itself 
+                  anime({
                      targets: group,
                      scale: targetScale,
                      duration: dynamicDuration * 1000, // Convert to ms
                      easing: animeEasing
-                 });
+                 }); 
+                 */
+                 // Also scale the corresponding label group
+                 if (labelGroup) {
+                     anime({
+                         targets: labelGroup,
+                         scale: labelTargetScale, // Use separate label scale
+                         translateX: (1 - labelTargetScale) * parseFloat(labelGroup.dataset.centerX || '0'),
+                         translateY: (1 - labelTargetScale) * parseFloat(labelGroup.dataset.centerY || '0'),
+                         duration: dynamicDuration * 1000, 
+                         easing: animeEasing
+                     });
+                 }
             });
 
             // Show tooltip
-            tooltip.textContent = activeGroup.dataset.service || 'N/A';
-            tooltip.classList.add('active');
+            // tooltip.textContent = activeGroup.dataset.service || 'N/A'; // REMOVED
+            // tooltip.classList.add('active'); // REMOVED
 
         } catch(err) { console.error("Error in mouseenter:", err); }
     }
@@ -401,6 +770,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const activeGroup = event.currentTarget; // The group being left
             const activePath = activeGroup.querySelector('.wedge-path');
             const activeMarker = activeGroup.querySelector('.marker-circle');
+            const wedgeIndex = activeGroup.dataset.index;
+            const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
+            const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
 
             // --- Animate ACTIVE wedge back using Anime.js ---
             const originalD = activeGroup.dataset.originalPath;
@@ -417,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dynamicDurationMs = (maxDurationSeconds * Math.max(0.1, durationRatio)) * 1000;
 
             // Stop existing animations
-            anime.remove([activePath, activeMarker, activeGroup]);
+            anime.remove([activePath, activeMarker, activeGroup, activeLabelLine]); // Remove from line too
 
             // console.log(`MouseLeave Active Path: Target d="${originalD.substring(0,30)}...", Duration=${dynamicDurationMs}`); // Debug
             // console.log(`MouseLeave Active Marker: Target cx=${originalMX}, cy=${originalMY}, Duration=${dynamicDurationMs}`); // Debug
@@ -436,10 +808,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 easing: animeEasing
             });
 
+            // Animate the label line start point back
+            if (activeLabelLine && !isNaN(originalMX) && !isNaN(originalMY)) {
+                 // Calculate original offset start point (again, as originalMX/Y are marker centers)
+                // const originalLineStartAngleRad = Math.atan2(parseFloat(originalMY) - center, parseFloat(originalMX) - center); // OLD
+                // const originalLineStartX = parseFloat(originalMX) + (markerRadius + 2) * Math.cos(originalLineStartAngleRad); // OLD
+                // const originalLineStartY = parseFloat(originalMY) + (markerRadius + 2) * Math.sin(originalLineStartAngleRad); // OLD
+                 const originalMarkerCenterPos = { x: parseFloat(originalMX), y: parseFloat(originalMY) };
+                 const originalLineStartPoint = calculateLineStartPoint(originalMarkerCenterPos); // Use helper
+                anime({
+                    targets: activeLabelLine,
+                    x1: originalLineStartPoint.x, // Animate back to offset point
+                    y1: originalLineStartPoint.y, // Animate back to offset point
+                    duration: dynamicDurationMs,
+                    easing: animeEasing
+                });
+            } else {
+                // This might happen briefly during setup, don't log as error unless persistent
+                // console.warn("Could not find or animate active label line back for index:", wedgeIndex);
+            }
+
             // Animate ALL wedges back to scale 1
             wedgeGroups.forEach(group => {
                 // Stop any previous scaling animation
                  anime.remove(group);
+
+                 const groupIndex = group.dataset.index;
+                 const labelGroup = labelsGroup.querySelector(`.label-group-${groupIndex}`);
+                 if (labelGroup) {
+                    anime.remove(labelGroup);
+                 }
 
                 const currentGroupOuterRadius = parseFloat(group.dataset.originalOuterRadius);
                  if(isNaN(currentGroupOuterRadius)){ console.warn("Skipping scale back for group with invalid radius", group.dataset.service); return; }
@@ -450,16 +848,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 // console.log(`MouseLeave Scale: Group=${group.dataset.service}, TargetScale=1.0, Duration=${dynamicDuration * 1000}`); // Debug
 
                 // Use anime.js for scaling back
-                anime({
-                     targets: group,
-                     scale: 1.0, // Return all to normal scale
-                     duration: dynamicDuration * 1000, // Convert to ms
-                     easing: animeEasing
-                 });
+                 /* REMOVED Scaling reset of wedge group itself
+                  anime({
+                      targets: group,
+                      scale: 1.0, // Return all to normal scale
+                      duration: dynamicDuration * 1000, // Convert to ms
+                      easing: animeEasing
+                  });
+                  */
+                 // Also scale label group back
+                 if (labelGroup) {
+                     anime({
+                         targets: labelGroup,
+                         scale: 1.0, 
+                         translateX: 0,
+                         translateY: 0,
+                         duration: dynamicDuration * 1000, 
+                         easing: animeEasing
+                     });
+                 }
             });
 
             // Hide tooltip
-            tooltip.classList.remove('active');
+            // tooltip.classList.remove('active'); // REMOVED
 
          } catch(err) { console.error("Error in mouseleave:", err); }
     }
