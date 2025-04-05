@@ -143,6 +143,37 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("FATAL: No wedge colors defined or found in CSS (--wedge-colors).");
         return; // Stop if no colors
     }
+    
+    // Define primary brand colors to prioritize
+    const primaryBrandColors = [
+        '#75c9b9', // Mint
+        '#2aa1b9', // Turquoise (IR IS BLUE)
+        '#4c8e9a', // Teal
+        '#f16867', // Salmon
+        '#094054'  // Indigo (this is dark but included since it's primary)
+    ];
+    
+    // Create a prioritized color array with primary colors first
+    const prioritizedColors = [];
+    
+    // First add all primary brand colors that exist in the CSS variables
+    primaryBrandColors.forEach(color => {
+        if (wedgeColorVarsMaster.includes(color) || 
+            wedgeColorVarsMaster.includes(color.toUpperCase())) {
+            prioritizedColors.push(color);
+        }
+    });
+    
+    // Then add all remaining colors from CSS
+    wedgeColorVarsMaster.forEach(color => {
+        // Only add if not already in prioritized list (case insensitive check)
+        const colorLower = color.toLowerCase();
+        if (!primaryBrandColors.some(primary => primary.toLowerCase() === colorLower)) {
+            prioritizedColors.push(color);
+        }
+    });
+    
+    console.log("Using prioritized brand colors for chart elements");
 
     const numServices = services.length;
     if (numServices === 0) {
@@ -190,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Assign Colors
     const assignedColors = new Array(numServices);
-    let availableColors = shuffleArray([...wedgeColorVarsMaster]);
+    let availableColors = shuffleArray([...prioritizedColors]);
     let lastAssignedColor = null;
     for (let i = 0; i < numServices; i++) { /* ... Color assignment logic (same as before) ... */
         let chosenColor = null; let chosenIndex = -1;
@@ -198,11 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chosenIndex === -1 && availableColors.length > 0) { chosenIndex = 0; }
         if (chosenIndex !== -1) { chosenColor = availableColors.splice(chosenIndex, 1)[0]; }
         else {
-            availableColors = shuffleArray([...wedgeColorVarsMaster]); chosenIndex = -1;
+            availableColors = shuffleArray([...prioritizedColors]); chosenIndex = -1;
             for (let j = 0; j < availableColors.length; j++) { if (availableColors[j] !== lastAssignedColor || availableColors.length === 1) { chosenIndex = j; break; } }
             if (chosenIndex !== -1) { chosenColor = availableColors.splice(chosenIndex, 1)[0]; }
             else if (availableColors.length > 0) { chosenColor = availableColors.splice(0, 1)[0]; }
-            else { chosenColor = "#CCCCCC"; console.error("Critical Error assigning color."); }
+            else { chosenColor = "#75c9b9"; console.error("Critical Error assigning color, using Mint as fallback."); }
         }
         assignedColors[i] = chosenColor; lastAssignedColor = chosenColor;
     }
@@ -541,6 +572,9 @@ document.addEventListener('DOMContentLoaded', () => {
             labelGroup.dataset.centerX = boxCenterX;
             labelGroup.dataset.centerY = boxCenterY;
 
+            // Set initial transform to ensure proper position on page load
+            const initialTransform = `translate(${boxCenterX}, ${boxCenterY}) scale(1) translate(${-boxCenterX}, ${-boxCenterY})`;
+
             // Create Background Box
             const labelBox = document.createElementNS("http://www.w3.org/2000/svg", "rect");
             labelBox.setAttribute('x', boxX);
@@ -552,7 +586,8 @@ document.addEventListener('DOMContentLoaded', () => {
             labelBox.setAttribute('stroke-width', labelBoxStrokeWidth); // Set border width from CSS var
             labelBox.setAttribute('rx', labelBoxRx);
             labelBox.setAttribute('ry', labelBoxRx);
-            labelBox.classList.add('label-box');
+            labelBox.setAttribute('transform', initialTransform); // Set initial transform
+            labelBox.classList.add('label-box', `label-box-${index}`);
 
             // Create Line
             const labelLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -577,8 +612,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create the main text element (container for tspans)
             const textElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
             textElement.setAttribute('text-anchor', 'middle'); // Force middle anchor
-            textElement.classList.add('label-text'); // Apply class for styling (font)
+            textElement.classList.add('label-text', `label-text-element-${index}`); // Apply class with index
             textElement.setAttribute('font-size', labelTextSize);
+            textElement.setAttribute('transform', initialTransform); // Set initial transform
 
             // Calculate starting X and Y for the text block
             const textX = boxX + boxWidth / 2;
@@ -731,30 +767,83 @@ document.addEventListener('DOMContentLoaded', () => {
                      targetScale = 1.0; // Active wedge doesn't change scale
                      labelTargetScale = labelHoverScale; // Active label grows
                  } else {
-                    targetScale = shrinkScale; // Inactive wedge shrinks
+                    // Animate INACTIVE wedge INWARDS (Shrink)
+                    targetScale = shrinkScale; // Inactive wedge target scale (used for label)
                     labelTargetScale = shrinkScale; // Inactive label shrinks
+ 
+                    const inactivePath = group.querySelector('.wedge-path');
+                    const inactiveMarker = group.querySelector('.marker-circle');
+                    const inactiveLabelLine = labelGroup ? labelGroup.querySelector('.label-line') : null;
+
+                    // Get necessary data for shrunk calculation
+                    const sAngleInactive = parseFloat(group.dataset.startAngle);
+                    const eAngleInactive = parseFloat(group.dataset.endAngle);
+                    const mAngleInactive = parseFloat(group.dataset.markerAngle);
+
+                    // Calculate a UNIFORM shrunk radius based on minLengthFactor
+                    const uniformShrunkRadius = visualInnerRadius + (maxAvailableRadialSpace * minLengthFactor * shrinkScale);
+
+                    // Calculate shrunk path and marker position using INACTIVE angles
+                    const shrunkPathData = calculatePathData(uniformShrunkRadius, sAngleInactive, eAngleInactive);
+                    const shrunkMarkerPos = polarToCartesian(center, center, uniformShrunkRadius, mAngleInactive);
+
+                    // Stop previous animations on inactive elements
+                    if (inactivePath) anime.remove(inactivePath);
+                    if (inactiveMarker) anime.remove(inactiveMarker);
+                    if (inactiveLabelLine) anime.remove(inactiveLabelLine);
+
+                    // Animate INACTIVE wedge INWARDS (Shrink) to UNIFORM size
+                    if (inactivePath && shrunkPathData) {
+                        anime({
+                            targets: inactivePath, // Target the PATH
+                            d: shrunkPathData,
+                            duration: dynamicDuration * 1000,
+                            easing: animeEasing
+                        });
+                    }
+                    if (inactiveMarker && shrunkMarkerPos) {
+                        anime({
+                            targets: inactiveMarker, // Target the MARKER
+                            cx: shrunkMarkerPos.x,
+                            cy: shrunkMarkerPos.y,
+                            duration: dynamicDuration * 1000,
+                            easing: animeEasing
+                        });
+                    }
+                    // Animate INACTIVE line start point INWARDS
+                    if (inactiveLabelLine && shrunkMarkerPos) {
+                        const shrunkLineStartPoint = calculateLineStartPoint(shrunkMarkerPos);
+                        anime({
+                            targets: inactiveLabelLine,
+                            x1: shrunkLineStartPoint.x,
+                            y1: shrunkLineStartPoint.y,
+                            duration: dynamicDuration * 1000,
+                            easing: animeEasing
+                        });
+                    }
                  }
 
-                // console.log(`MouseEnter Scale: Group=${group.dataset.service}, TargetScale=${targetScale}, Duration=${dynamicDuration * 1000}`); // Debug
-
-                 /* REMOVED Scaling of wedge group itself 
-                  anime({
-                     targets: group,
-                     scale: targetScale,
-                     duration: dynamicDuration * 1000, // Convert to ms
-                     easing: animeEasing
-                 }); 
-                 */
-                 // Also scale the corresponding label group
+                 // Also scale the corresponding label elements (box and text)
                  if (labelGroup) {
-                     anime({
-                         targets: labelGroup,
-                         scale: labelTargetScale, // Use separate label scale
-                         translateX: (1 - labelTargetScale) * parseFloat(labelGroup.dataset.centerX || '0'),
-                         translateY: (1 - labelTargetScale) * parseFloat(labelGroup.dataset.centerY || '0'),
-                         duration: dynamicDuration * 1000, 
-                         easing: animeEasing
-                     });
+                     const boxToScale = labelGroup.querySelector(`.label-box-${groupIndex}`);
+                     const textToScale = labelGroup.querySelector(`.label-text-element-${groupIndex}`);
+                     const centerX = parseFloat(labelGroup.dataset.centerX || '0');
+                     const centerY = parseFloat(labelGroup.dataset.centerY || '0');
+
+                     if (boxToScale && textToScale) { // Check elements exist
+                         // Construct the target transform string for scaling around the center
+                         const scale = labelTargetScale;
+                         const targetTransform = `translate(${centerX}, ${centerY}) scale(${scale}) translate(${-centerX}, ${-centerY})`; // Use centerX, centerY
+ 
+                         anime.remove([boxToScale, textToScale]); // Restore remove call ONLY in MouseEnter
+ 
+                         anime({
+                             targets: [boxToScale, textToScale], // Target BOX and TEXT only
+                             transform: targetTransform, // Animate transform attribute directly
+                             duration: dynamicDuration * 1000,
+                             easing: animeEasing
+                         });
+                     }
                  }
             });
 
@@ -845,27 +934,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 const durationRatio = (maxPossibleOuterRadius > 0) ? Math.min(1, currentGroupOuterRadius / maxPossibleOuterRadius) : 1;
                 const dynamicDuration = maxDurationSeconds * Math.max(0.1, durationRatio);
 
-                // console.log(`MouseLeave Scale: Group=${group.dataset.service}, TargetScale=1.0, Duration=${dynamicDuration * 1000}`); // Debug
-
-                // Use anime.js for scaling back
-                 /* REMOVED Scaling reset of wedge group itself
-                  anime({
-                      targets: group,
-                      scale: 1.0, // Return all to normal scale
-                      duration: dynamicDuration * 1000, // Convert to ms
-                      easing: animeEasing
-                  });
-                  */
-                 // Also scale label group back
+                // Animate wedge path back to original state
+                const currentPath = group.querySelector('.wedge-path');
+                const originalD_current = group.dataset.originalPath;
+                if (currentPath && originalD_current) {
+                    anime({
+                        targets: currentPath,
+                        d: originalD_current,
+                        duration: dynamicDuration * 1000,
+                        easing: animeEasing
+                    });
+                }
+                // Animate wedge marker back to original state
+                const currentMarker = group.querySelector('.marker-circle');
+                const originalMX_current = group.dataset.originalMarkerX;
+                const originalMY_current = group.dataset.originalMarkerY;
+                if (currentMarker && !isNaN(originalMX_current) && !isNaN(originalMY_current)) {
+                    anime({
+                        targets: currentMarker,
+                        cx: originalMX_current,
+                        cy: originalMY_current,
+                        duration: dynamicDuration * 1000,
+                        easing: animeEasing
+                    });
+                }
+                // Animate label line back to original start point
+                if (labelGroup && !isNaN(originalMX_current) && !isNaN(originalMY_current)) {
+                    const originalMarkerCenterPos = { x: parseFloat(originalMX_current), y: parseFloat(originalMY_current) };
+                    const originalLineStartPoint = calculateLineStartPoint(originalMarkerCenterPos); // Use helper
+                    anime({
+                        targets: labelGroup.querySelector('.label-line'),
+                        x1: originalLineStartPoint.x, 
+                        y1: originalLineStartPoint.y, 
+                        duration: dynamicDuration * 1000,
+                        easing: animeEasing
+                    });
+                }
+                 
+                 // Animate label group back to original state
                  if (labelGroup) {
-                     anime({
-                         targets: labelGroup,
-                         scale: 1.0, 
-                         translateX: 0,
-                         translateY: 0,
-                         duration: dynamicDuration * 1000, 
-                         easing: animeEasing
-                     });
+                     const boxToReset = labelGroup.querySelector(`.label-box-${groupIndex}`);
+                     const textToReset = labelGroup.querySelector(`.label-text-element-${groupIndex}`);
+                     if (boxToReset && textToReset) {
+                         // anime.remove([boxToReset, textToReset]); // Keep this commented out per user feedback
+                         
+                         const centerX = parseFloat(labelGroup.dataset.centerX || '0');
+                         const centerY = parseFloat(labelGroup.dataset.centerY || '0');
+                         // Use same transform pattern as mouseEnter but with scale=1
+                         const targetTransform = `translate(${centerX}, ${centerY}) scale(1) translate(${-centerX}, ${-centerY})`;
+                         
+                         anime({
+                             targets: [boxToReset, textToReset], // Target BOTH box and text
+                             transform: targetTransform, // Use consistent transform pattern
+                             duration: dynamicDuration * 1000, 
+                             easing: animeEasing
+                         });
+                     }
                  }
             });
 
