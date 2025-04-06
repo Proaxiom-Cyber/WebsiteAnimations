@@ -619,6 +619,59 @@ function initializeRadialChart(services, serviceConfig) {
             marker.setAttribute("fill", wedgeColor);
             marker.classList.add('marker-circle');
 
+            // Create Icon
+            const iconAngle = startAngle + anglePerWedge * 0.5; // Position at middle of wedge
+            // Calculate center of wedge (between inner and outer radius)
+            const iconDistance = visualInnerRadius + ((originalOuterRadius - visualInnerRadius) / 2); // Position at center of wedge
+            const iconPos = polarToCartesian(center, center, iconDistance, iconAngle);
+            
+            // Scale icon size based on wedge size - make it much larger to fill more of the wedge
+            // Calculate wedge area to determine proportional icon size
+            const wedgeWidth = originalOuterRadius - visualInnerRadius;
+            const wedgeAngleRadians = (anglePerWedge * Math.PI) / 180;
+            // Base icon size on wedge dimensions, with a more dramatic scale range
+            const iconSize = Math.max(30, Math.min(50, 30 + (wedgeWidth * wedgeAngleRadians * 0.5))); 
+            
+            // Get icon path from service data
+            const iconFile = service.iconFile;
+            console.log(`Service '${service.name}' - Icon file: ${iconFile}`);
+            const iconPath = iconFile ? `./assets/icons/${iconFile}` : null;
+            let icon = null;
+            
+            if (iconPath) {
+                // Create the icon image element
+                console.log(`Creating icon with path: ${iconPath}`);
+                icon = document.createElementNS("http://www.w3.org/2000/svg", "image");
+                icon.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", iconPath);
+                icon.setAttribute("x", iconPos.x - iconSize/2); // Center the icon
+                icon.setAttribute("y", iconPos.y - iconSize/2);
+                icon.setAttribute("width", iconSize);
+                icon.setAttribute("height", iconSize);
+                icon.classList.add('wedge-icon');
+                icon.dataset.originalX = iconPos.x - iconSize/2;
+                icon.dataset.originalY = iconPos.y - iconSize/2;
+                icon.dataset.originalSize = iconSize;
+
+                // Add error handler to debug loading issues
+                icon.addEventListener('error', (e) => {
+                    console.error(`Failed to load icon: ${iconPath}`, e);
+                });
+
+                // Add load handler to confirm successful loading
+                icon.addEventListener('load', () => {
+                    console.log(`Successfully loaded icon: ${iconPath}`);
+                });
+
+                // Apply filter for better visibility
+                icon.setAttribute("filter", "drop-shadow(1px 1px 1px rgba(0,0,0,0.3))");
+                
+                // Set a contrasting color as a filter
+                const contrastColor = getContrastColor(wedgeColor);
+                if (contrastColor === '#ffffff') {
+                    // For dark backgrounds, use white filter
+                    icon.style.filter = "brightness(0) invert(1)";
+                }
+            }
 
             // --- Create & Measure Text (Temporarily) ---
             const midAngle = startAngle + anglePerWedge / 2;
@@ -690,9 +743,12 @@ function initializeRadialChart(services, serviceConfig) {
                 wedgeColor: wedgeColor // Store the wedge color
             });
 
-            // Append wedge group (path and marker only in this pass)
+            // Append wedge group (path, marker, and icon in this pass)
             wedgeGroup.appendChild(path);
             wedgeGroup.appendChild(marker);
+            if (icon) {
+                wedgeGroup.appendChild(icon); // Add the icon to the wedge group
+            }
             allWedgesGroup.appendChild(wedgeGroup); // Appending to the main SVG group
 
             wedgeGroups.push(wedgeGroup); // Add to JS array *only if successful*
@@ -847,6 +903,7 @@ function initializeRadialChart(services, serviceConfig) {
             const activeGroup = event.currentTarget;
             const activePath = activeGroup.querySelector('.wedge-path');
             const activeMarker = activeGroup.querySelector('.marker-circle');
+            const activeIcon = activeGroup.querySelector('.wedge-icon');
             const wedgeIndex = activeGroup.dataset.index;
             const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
             const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
@@ -864,16 +921,57 @@ function initializeRadialChart(services, serviceConfig) {
             // Show the service description
             showServiceDescription(serviceDetails, wedgeColor, midAngle);
 
+            // Stop any existing animation on these elements before starting new ones
+            if (activeIcon) anime.remove(activeIcon);
+            anime.remove([activePath, activeMarker, activeGroup]);
+            if (activeLabelLine) anime.remove(activeLabelLine);
+
             // --- Animate ACTIVE wedge shape/marker using Anime.js ---
             const sAngle = parseFloat(activeGroup.dataset.startAngle);
             const eAngle = parseFloat(activeGroup.dataset.endAngle);
             const mAngle = parseFloat(activeGroup.dataset.markerAngle);
-            const activeOriginalRadius = parseFloat(activeGroup.dataset.originalOuterRadius); // Get radius for duration calc
-
-            if (!activePath || !activeMarker || isNaN(sAngle) || isNaN(eAngle) || isNaN(mAngle) || isNaN(activeOriginalRadius)) {
-                 console.error("MouseEnter: Missing elements or angle/radius data.", activeGroup.dataset); return;
+            const oRadius = parseFloat(activeGroup.dataset.originalOuterRadius);
+            
+            // Track if this is the first time this wedge is activated
+            if (!activeGroup.dataset.activated) {
+                activeGroup.dataset.activated = "true";
             }
 
+            // --- Animate ACTIVE icon using Anime.js (if icon exists) ---
+            if (activeIcon) {
+                console.log("Found active icon, animating...", activeIcon);
+                // Get original values
+                const originalX = parseFloat(activeIcon.dataset.originalX);
+                const originalY = parseFloat(activeIcon.dataset.originalY);
+                const originalSize = parseFloat(activeIcon.dataset.originalSize);
+                
+                // Calculate the center of the expanded wedge
+                const iconAngle = (sAngle + eAngle) / 2; // Middle angle of the wedge
+                const iconDistance = visualInnerRadius + ((hoverOuterRadius - visualInnerRadius) / 2); // Position at center of wedge
+                const newIconPos = polarToCartesian(center, center, iconDistance, iconAngle);
+                
+                // Calculate expanded wedge dimensions for proportional sizing
+                const expandedWedgeWidth = hoverOuterRadius - visualInnerRadius;
+                const wedgeAngleRadians = ((eAngle - sAngle) * Math.PI) / 180;
+                // Increase size even more on hover
+                const expandedIconSize = Math.max(50, Math.min(80, 50 + (expandedWedgeWidth * wedgeAngleRadians * 0.5)));
+                const sizeRatio = expandedIconSize / originalSize;
+                
+                // Animate icon growing and moving with the wedge
+                anime({
+                    targets: activeIcon,
+                    width: originalSize * sizeRatio,  // Grow proportionally
+                    height: originalSize * sizeRatio,
+                    x: newIconPos.x - ((originalSize * sizeRatio)/2), // Center at new position
+                    y: newIconPos.y - ((originalSize * sizeRatio)/2),
+                    duration: fixedWedgeAnimationDurationMs,
+                    easing: animeEasing
+                });
+            } else {
+                console.log("No icon found for this wedge");
+            }
+
+            // --- Animate ACTIVE wedge shape/marker using Anime.js ---
             const hoverPathData = calculatePathData(hoverOuterRadius, sAngle, eAngle);
             const hoverMarkerPos = polarToCartesian(center, center, hoverOuterRadius, mAngle);
 
@@ -883,12 +981,6 @@ function initializeRadialChart(services, serviceConfig) {
              if (isNaN(hoverMarkerPos.x) || isNaN(hoverMarkerPos.y)) {
                   console.error("MouseEnter: Failed HOVER marker calc."); return;
              }
-
-            // Stop any existing animation on these elements before starting new ones
-            anime.remove([activePath, activeMarker, activeGroup, activeLabelLine]); // Remove from line too
-
-            // console.log(`MouseEnter Active Path: Target d="${hoverPathData.substring(0,30)}...", Duration=${dynamicDurationActiveMs}`); // Debug
-            // console.log(`MouseEnter Active Marker: Target cx=${hoverMarkerPos.x}, cy=${hoverMarkerPos.y}, Duration=${dynamicDurationActiveMs}`); // Debug
 
             anime({
                 targets: activePath,
@@ -997,6 +1089,37 @@ function initializeRadialChart(services, serviceConfig) {
                             easing: animeEasing
                         });
                     }
+                    
+                    // Animate inactive icons to follow their wedges
+                    const inactiveIcon = group.querySelector('.wedge-icon');
+                    if (inactiveIcon) {
+                        // Get original icon size
+                        const iconSize = parseFloat(inactiveIcon.dataset.originalSize);
+                        
+                        // Calculate the center of the shrunk wedge
+                        const iconAngle = (sAngleInactive + eAngleInactive) / 2;
+                        const iconDistance = visualInnerRadius + ((uniformShrunkRadius - visualInnerRadius) / 2); // Position at center of wedge
+                        const shrunkIconPos = polarToCartesian(center, center, iconDistance, iconAngle);
+                        
+                        // Calculate shrunk dimensions for proportional sizing
+                        const shrunkWedgeWidth = uniformShrunkRadius - visualInnerRadius;
+                        const shrunkWedgeAngleRadians = ((eAngleInactive - sAngleInactive) * Math.PI) / 180;
+                        // Determine proportional shrunk size
+                        const shrunkIconSize = Math.max(24, Math.min(40, 24 + (shrunkWedgeWidth * shrunkWedgeAngleRadians * 0.5)));
+                        
+                        // Animate icon to new position
+                        anime({
+                            targets: inactiveIcon,
+                            width: shrunkIconSize,
+                            height: shrunkIconSize,
+                            x: shrunkIconPos.x - (shrunkIconSize/2),
+                            y: shrunkIconPos.y - (shrunkIconSize/2),
+                            opacity: 0.7, // Slightly fade inactive icons
+                            duration: fixedWedgeAnimationDurationMs,
+                            easing: animeEasing
+                        });
+                    }
+                    
                     // Animate INACTIVE line start point INWARDS
                     if (inactiveLabelLine && shrunkMarkerPos) {
                         const shrunkLineStartPoint = calculateLineStartPoint(shrunkMarkerPos);
@@ -1057,71 +1180,102 @@ function initializeRadialChart(services, serviceConfig) {
     }
 
     function handleMouseLeave(event) {
-        try {
-            const activeGroup = event.currentTarget; // The group being left
+         try {
+            const activeGroup = event.currentTarget;
             const activePath = activeGroup.querySelector('.wedge-path');
             const activeMarker = activeGroup.querySelector('.marker-circle');
+            const activeIcon = activeGroup.querySelector('.wedge-icon');
             const wedgeIndex = activeGroup.dataset.index;
-            const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
-            const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
+            const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`);
+            const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null;
+            const activeLabelBox = activeLabelGroup ? activeLabelGroup.querySelector('.label-box') : null;
+            const activeLabelText = activeLabelGroup ? activeLabelGroup.querySelector('.label-text') : null;
 
-            // Set flag indicating mouse left this wedge
-            isMouseOverAnyWedge = false;
-
-            // Delay hiding the description to check if we move to another wedge
-            setTimeout(() => {
-                // Only hide if we're not over any wedge
-                if (!isMouseOverAnyWedge) {
-                    hideServiceDescription();
-                }
-            }, 50); // Short delay to allow for mouseenter on adjacent wedge
+            // Hide the service description
+            hideServiceDescription();
             
-            // --- Animate ACTIVE wedge back using Anime.js ---
-            const originalD = activeGroup.dataset.originalPath;
-            const originalMX = activeGroup.dataset.originalMarkerX;
-            const originalMY = activeGroup.dataset.originalMarkerY;
-            const groupOuterRadius = parseFloat(activeGroup.dataset.originalOuterRadius); // Use this wedge's radius for duration
-
-            if (!activePath || !activeMarker || !originalD || isNaN(originalMX) || isNaN(originalMY) || isNaN(groupOuterRadius)) {
-                 console.error("MouseLeave: Missing elements or original data/radius.", activeGroup.dataset); return;
-            }
+            // Reset marker
+            const originalMarkerX = parseFloat(activeGroup.dataset.originalMarkerX || center);
+            const originalMarkerY = parseFloat(activeGroup.dataset.originalMarkerY || center);
+            
+            // Get original path data
+            const originalPathData = activeGroup.dataset.originalPath || '';
 
             // Stop existing animations
-            anime.remove([activePath, activeMarker, activeGroup, activeLabelLine]); // Remove from line too
+            if (activeIcon) anime.remove(activeIcon);
+            anime.remove([activePath, activeMarker]);
+            if (activeLabelLine) anime.remove(activeLabelLine);
 
-            // console.log(`MouseLeave Active Path: Target d="${originalD.substring(0,30)}...", Duration=${dynamicDurationMs}`); // Debug
-            // console.log(`MouseLeave Active Marker: Target cx=${originalMX}, cy=${originalMY}, Duration=${dynamicDurationMs}`); // Debug
+            // --- Animate INACTIVE wedge shape/marker using Anime.js ---
+            // Calculate path animation target
+            const pathAnimationTarget = {
+                d: originalPathData
+            };
 
+            // Animate path back to original
             anime({
                 targets: activePath,
-                d: originalD, // Animate back to original shape
-                duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
-                easing: animeEasing
+                ...pathAnimationTarget,
+                duration: fixedWedgeAnimationDurationMs,
+                easing: animeEasing,
             });
+
+            // Animate marker back to original
             anime({
                 targets: activeMarker,
-                cx: originalMX, // Animate back to original position
-                cy: originalMY,
-                duration: fixedWedgeAnimationDurationMs, // Use FIXED duration
+                cx: originalMarkerX,
+                cy: originalMarkerY,
+                r: markerRadius,
+                duration: fixedWedgeAnimationDurationMs,
                 easing: animeEasing
             });
 
+            // --- Animate INACTIVE icon using Anime.js (if icon exists) ---
+            if (activeIcon) {
+                // Get original values
+                const originalX = parseFloat(activeIcon.dataset.originalX);
+                const originalY = parseFloat(activeIcon.dataset.originalY);
+                const originalSize = parseFloat(activeIcon.dataset.originalSize);
+                
+                // Calculate center position of the original wedge
+                const iconAngle = (parseFloat(activeGroup.dataset.startAngle) + parseFloat(activeGroup.dataset.endAngle)) / 2;
+                const originalRadius = parseFloat(activeGroup.dataset.originalOuterRadius);
+                const iconDistance = visualInnerRadius + ((originalRadius - visualInnerRadius) / 2); // Position at center of wedge
+                const originalIconPos = polarToCartesian(center, center, iconDistance, iconAngle);
+                
+                // Remove the pulsing animation by stopping all animations on the icon
+                anime.remove(activeIcon);
+                
+                // Animate icon shrinking back to original size and position
+                anime({
+                    targets: activeIcon,
+                    width: originalSize,
+                    height: originalSize,
+                    x: originalIconPos.x - (originalSize/2), // Center at original position
+                    y: originalIconPos.y - (originalSize/2),
+                    opacity: 1,
+                    scale: 1,
+                    duration: fixedWedgeAnimationDurationMs,
+                    easing: animeEasing
+                });
+            }
+
             // Animate the label line start point back
-            if (activeLabelLine && !isNaN(originalMX) && !isNaN(originalMY)) {
-                 const originalMarkerCenterPos = { x: parseFloat(originalMX), y: parseFloat(originalMY) };
-                 const originalLineStartPoint = calculateLineStartPoint(originalMarkerCenterPos); // Use helper
-                 const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`);
-                 const boxCenterX = parseFloat(activeLabelGroup.dataset.centerX || '0');
-                 const boxCenterY = parseFloat(activeLabelGroup.dataset.centerY || '0');
-                 
-                 // Create original curved path
-                 const originalPathData = createCurvedPath(
-                     originalLineStartPoint.x,
-                     originalLineStartPoint.y,
-                     boxCenterX,
-                     boxCenterY
-                 );
-                 
+            if (activeLabelLine && !isNaN(originalMarkerX) && !isNaN(originalMarkerY)) {
+                const originalMarkerCenterPos = { x: originalMarkerX, y: originalMarkerY };
+                const originalLineStartPoint = calculateLineStartPoint(originalMarkerCenterPos); // Use helper
+                const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`);
+                const boxCenterX = parseFloat(activeLabelGroup.dataset.centerX || '0');
+                const boxCenterY = parseFloat(activeLabelGroup.dataset.centerY || '0');
+                
+                // Create original curved path
+                const originalPathData = createCurvedPath(
+                    originalLineStartPoint.x,
+                    originalLineStartPoint.y,
+                    boxCenterX,
+                    boxCenterY
+                );
+                
                 anime({
                     targets: activeLabelLine,
                     d: originalPathData, // Animate the path data
@@ -1172,6 +1326,30 @@ function initializeRadialChart(services, serviceConfig) {
                         easing: animeEasing
                     });
                 }
+                
+                // Restore all icons to original positions
+                const icon = group.querySelector('.wedge-icon');
+                if (icon) {
+                    const originalSize = parseFloat(icon.dataset.originalSize);
+                    
+                    // Calculate center position of the original wedge
+                    const iconAngle = (parseFloat(group.dataset.startAngle) + parseFloat(group.dataset.endAngle)) / 2;
+                    const originalRadius = parseFloat(group.dataset.originalOuterRadius);
+                    const iconDistance = visualInnerRadius + ((originalRadius - visualInnerRadius) / 2); // Position at center of wedge
+                    const originalIconPos = polarToCartesian(center, center, iconDistance, iconAngle);
+                    
+                    anime({
+                        targets: icon,
+                        width: originalSize,
+                        height: originalSize,
+                        x: originalIconPos.x - (originalSize/2), // Center at original position
+                        y: originalIconPos.y - (originalSize/2),
+                        opacity: 1,
+                        duration: fixedWedgeAnimationDurationMs,
+                        easing: animeEasing
+                    });
+                }
+                
                 // Animate label line back to original start point
                 if (labelGroup && !isNaN(originalMX_current) && !isNaN(originalMY_current)) {
                     const originalMarkerCenterPos = { x: parseFloat(originalMX_current), y: parseFloat(originalMY_current) };
@@ -1222,7 +1400,7 @@ function initializeRadialChart(services, serviceConfig) {
             // Hide tooltip
             // tooltip.classList.remove('active'); // REMOVED
 
-        } catch(err) { console.error("Error in mouseleave:", err); }
+         } catch(err) { console.error("Error in mouseleave:", err); }
     }
 
     // Get service description from services array
@@ -1231,125 +1409,120 @@ function initializeRadialChart(services, serviceConfig) {
         return service ? service : { name: serviceName, description: "No description available." };
     }
 
-    // --- Store state variables ---
-    let descriptionHideTimeout = null;
-    let currentActiveWedge = null;
-    let isMouseOverAnyWedge = false; // Add tracking for mouse over state
-
     // Show service description with animation
     function showServiceDescription(service, color, wedgeAngle) {
-        // Cancel any pending hide operation
-        if (descriptionHideTimeout) {
-            clearTimeout(descriptionHideTimeout);
-            descriptionHideTimeout = null;
-        }
-
         const container = document.querySelector('.service-description-container');
         const nameElement = container.querySelector('.service-name');
         const descriptionElement = container.querySelector('.service-description');
+        const iconElement = container.querySelector('.service-icon');
         const box = container.querySelector('.service-description-box');
         
-        // Create a smooth transition when changing between wedges
-        const isSameWedge = currentActiveWedge && currentActiveWedge.name === service.name;
-        const isAlreadyVisible = container.style.display === 'block' && 
-                               container.style.visibility === 'visible';
+        // Update content
+        nameElement.textContent = service.name;
+        descriptionElement.textContent = service.description;
         
-        // If transitioning between different wedges, fade out current content first
-        if (isAlreadyVisible && !isSameWedge) {
-            // First fade out the content
-            anime({
-                targets: [nameElement, descriptionElement],
-                opacity: 0,
-                duration: 150,
-                easing: 'easeOutQuad',
-                complete: function() {
-                    // After fade out completes, update content and fade back in
-                    updateDescriptionContent();
-                }
-            });
+        // Set the icon
+        if (service.iconFile) {
+            iconElement.src = `./assets/icons/${service.iconFile}`;
+            iconElement.style.display = 'block';
+            
+            // Always make the icon black with a consistent size and shadow
+            iconElement.style.filter = "brightness(0) drop-shadow(1px 1px 1px rgba(0,0,0,0.3))";
+            iconElement.style.width = "64px";
+            iconElement.style.height = "64px";
         } else {
-            // First appearance or same wedge - update content immediately
-            updateDescriptionContent();
+            iconElement.style.display = 'none';
         }
         
-        // Set mouse over state
-        isMouseOverAnyWedge = true;
+        // Update colors
+        box.style.borderLeftColor = color;
+        nameElement.style.borderBottomColor = color;
         
-        // Update the current active wedge
-        currentActiveWedge = service;
+        // Position the box relative to the SVG
+        const svgContainer = document.getElementById('radial-chart-svg');
+        const svgRect = svgContainer.getBoundingClientRect();
         
-        function updateDescriptionContent() {
-            // Update content
-            nameElement.textContent = service.name;
-            descriptionElement.textContent = service.description;
-            
-            // Update colors
-            box.style.borderLeftColor = color;
-            nameElement.style.setProperty('--underline-color', color);
-            
-            // Position based on wedge angle
-            const isRightSide = wedgeAngle < 180;
-            
-            // Position the box
-            container.style.position = 'absolute';
-            container.style.top = '50%';
-            container.style.transform = `translateY(calc(-50%))`;
-            
-            if (isRightSide) {
-                // If wedge is on right side, box on left
-                container.style.left = '-350px'; 
-                container.style.right = 'auto';
-            } else {
-                // If wedge is on left side, box on right
-                container.style.right = '-350px';
-                container.style.left = 'auto';
-            }
-            
-            // Make container visible if not already
-            container.style.display = 'block';
-            container.style.visibility = 'visible';
-            
-            // Fade in content if needed
-            if (!isAlreadyVisible || !isSameWedge) {
-                nameElement.style.opacity = '0';
-                descriptionElement.style.opacity = '0';
-                
-                anime({
-                    targets: [nameElement, descriptionElement],
-                    opacity: 1,
-                    duration: 300,
-                    easing: 'easeOutQuad'
-                });
-            }
-            
-            // Always ensure container is fully visible
-            anime({
-                targets: container,
-                opacity: 1,
-                duration: isAlreadyVisible ? 0 : 300, // Skip animation if already visible
-                easing: 'easeOutQuad'
-            });
+        // Make container visible with zero opacity for measuring
+        container.style.visibility = 'visible';
+        container.style.opacity = '0';
+        container.style.position = 'fixed';
+        
+        // Step 1: First put the container off-screen for measurement
+        const originalPosition = {
+            left: container.style.left,
+            right: container.style.right,
+            top: container.style.top
+        };
+        
+        container.style.left = '-9999px';
+        container.style.right = 'auto';
+        container.style.top = '0';
+        
+        // Step 2: Let the browser layout the element for measurement
+        // Force reflow
+        void container.offsetWidth;
+        
+        // Step 3: Measure the width of the container with content
+        const contentWidth = container.offsetWidth;
+        const contentHeight = container.offsetHeight;
+        
+        // Now set real width to match the content (with some buffer)
+        const finalWidth = Math.min(400, Math.max(300, contentWidth + 20)); // Min width 300px, max 400px
+        container.style.width = `${finalWidth}px`;
+        
+        // Simple positioning - left or right based on wedge angle
+        const isRightSide = wedgeAngle < 180;
+        
+        container.style.position = 'fixed';
+        container.style.top = '50%';
+        container.style.transform = 'translateY(-50%)';
+        
+        if (isRightSide) {
+            // If wedge is on right side, position box on left side of chart
+            container.style.right = `${window.innerWidth - svgRect.left + 30}px`;
+            container.style.left = 'auto';
+        } else {
+            // If wedge is on left side, position box on right side of chart
+            container.style.left = `${svgRect.right + 30}px`;
+            container.style.right = 'auto';
         }
+        
+        // Stop any existing animations
+        anime.remove(container);
+        
+        // Make visible and fade in
+        container.classList.add('active');
+        
+        anime({
+            targets: container,
+            opacity: 1,
+            duration: fixedTextAnimationDurationMs,
+            easing: animeEasing
+        });
     }
 
-    // Hide service description
+    // Hide service description with animation
     function hideServiceDescription() {
         const container = document.querySelector('.service-description-container');
         if (!container) return;
         
-        // No active wedge now
-        currentActiveWedge = null;
+        // Stop any existing animations
+        anime.remove(container);
         
-        // Fade out the container
+        // Simple fade out
         anime({
             targets: container,
             opacity: 0,
-            duration: 400,
-            easing: 'easeOutQuad',
+            duration: fixedTextAnimationDurationMs,
+            easing: animeEasing,
             complete: function() {
-                // Only after the animation completes, hide the container
+                container.classList.remove('active');
                 container.style.visibility = 'hidden';
-                container.style.display = 'none';
+                
+                // Reset position and size
+                container.style.left = 'auto';
+                container.style.right = 'auto';
+                container.style.width = 'auto'; // Reset to auto width
             }
         });
     }

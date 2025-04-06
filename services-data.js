@@ -7,31 +7,38 @@
 export const services = [
     { 
         name: "Cyber Strategy & Executive Risk",
-        description: "Our Cyber Strategy & Executive Risk services provide enterprise-wide roadmaps aligned with business objectives. We help organizations develop comprehensive security strategies, navigate complex regulatory landscapes, and build resilient security programs that balance protection with operational efficiency."
+        description: "Our Cyber Strategy & Executive Risk services provide enterprise-wide roadmaps aligned with business objectives. We help organizations develop comprehensive security strategies, navigate complex regulatory landscapes, and build resilient security programs that balance protection with operational efficiency.",
+        iconFile: "cyber_strategy_executive_risk.svg"
     },
     { 
         name: "Security Assessment & Architecture",
-        description: "Through our Security Assessment & Architecture services, we evaluate existing security postures and design robust frameworks tailored to your environment. Our experts analyze vulnerabilities, identify control gaps, and create architectural blueprints that enhance your security while supporting business agility."
+        description: "Through our Security Assessment & Architecture services, we evaluate existing security postures and design robust frameworks tailored to your environment. Our experts analyze vulnerabilities, identify control gaps, and create architectural blueprints that enhance your security while supporting business agility.",
+        iconFile: "security_assessment_architecture.svg"
     },
     { 
         name: "Governance, Risk & Compliance (GRC)",
-        description: "Our GRC services establish structured approaches to manage cybersecurity obligations across regulatory requirements and industry standards. We implement frameworks that streamline compliance processes, optimize risk management, and ensure your organization meets its legal and contractual obligations."
+        description: "Our GRC services establish structured approaches to manage cybersecurity obligations across regulatory requirements and industry standards. We implement frameworks that streamline compliance processes, optimize risk management, and ensure your organization meets its legal and contractual obligations.",
+        iconFile: "governance_risk_and_compliance.svg"
     },
     { 
         name: "Privacy, Identity & Trust",
-        description: "We help organizations protect sensitive data and maintain customer trust through comprehensive privacy programs. Our identity and trust solutions ensure secure authentication, proper access controls, and data protection measures that satisfy evolving privacy regulations while enhancing user experience."
+        description: "We help organizations protect sensitive data and maintain customer trust through comprehensive privacy programs. Our identity and trust solutions ensure secure authentication, proper access controls, and data protection measures that satisfy evolving privacy regulations while enhancing user experience.",
+        iconFile: "privacy_identity_and_trust.svg"
     },
     { 
         name: "Offensive Security",
-        description: "Our Offensive Security services simulate real-world attacks to identify and remediate vulnerabilities before they can be exploited. Through penetration testing, red team exercises, and targeted assessments, we help you understand and address weaknesses from an attacker's perspective."
+        description: "Our Offensive Security services simulate real-world attacks to identify and remediate vulnerabilities before they can be exploited. Through penetration testing, red team exercises, and targeted assessments, we help you understand and address weaknesses from an attacker's perspective.",
+        iconFile: "offensive_security.svg"
     },
     { 
         name: "Managed Cyber Programs",
-        description: "With our Managed Cyber Programs, we provide ongoing security expertise and operational support to organizations with limited internal resources. These flexible, subscription-based services include continuous monitoring, threat detection, incident response, and specialized cybersecurity guidance."
+        description: "With our Managed Cyber Programs, we provide ongoing security expertise and operational support to organizations with limited internal resources. These flexible, subscription-based services include continuous monitoring, threat detection, incident response, and specialized cybersecurity guidance.",
+        iconFile: "managed_cyber_programs.svg"
     },
     { 
         name: "Cybersecurity Innovation",
-        description: "Our Cybersecurity Innovation services explore emerging technologies and approaches to address evolving threats. We help organizations implement cutting-edge solutions like AI-powered defense systems, advanced threat intelligence, and security automation to stay ahead of sophisticated adversaries."
+        description: "Our Cybersecurity Innovation services explore emerging technologies and approaches to address evolving threats. We help organizations implement cutting-edge solutions like AI-powered defense systems, advanced threat intelligence, and security automation to stay ahead of sophisticated adversaries.",
+        iconFile: "cybersecurity_innovation.svg"
     }
 ];
 

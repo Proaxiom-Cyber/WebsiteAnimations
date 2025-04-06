@@ -12,7 +12,9 @@
 </head>
 <body>
     <div class="chart-container" role="img" aria-label="Service Portfolio Radial Chart">
-        <svg id="radial-chart-svg" viewBox="0 0 400 400" width="500" height="500">
+        <svg id="radial-chart-svg" viewBox="0 0 400 400" width="500" height="500"
+             xmlns="http://www.w3.org/2000/svg" 
+             xmlns:xlink="http://www.w3.org/1999/xlink">
             <defs>
                 <radialGradient id="center-gradient" cx="50%" cy="50%" r="50%" fx="15%" fy="15%">
                     <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
@@ -23,12 +25,15 @@
             <g id="all-wedges-group"></g>
             <g id="labels-and-lines-group"></g>
             <circle id="center-circle-visual" cx="200" cy="200" r="50" fill="url(#center-gradient)" />
-            <image id="center-logo" href="./assets/ProaxiomSubmark.svg"
+            <image id="center-logo" xlink:href="./assets/ProaxiomSubmark.svg"
                    x="170" y="170" height="60" width="60" />
         </svg>
         <div class="service-description-container">
             <div class="service-description-box">
-                <h3 class="service-name"></h3>
+                <div class="service-header">
+                    <img class="service-icon" src="" alt="Service Icon">
+                    <h3 class="service-name"></h3>
+                </div>
                 <p class="service-description"></p>
             </div>
         </div>
