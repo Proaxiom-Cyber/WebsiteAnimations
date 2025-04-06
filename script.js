@@ -850,6 +850,19 @@ function initializeRadialChart(services, serviceConfig) {
             const wedgeIndex = activeGroup.dataset.index;
             const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
             const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
+            
+            // Get service name and details for description
+            const serviceName = activeGroup.dataset.service;
+            const wedgeColor = activePath.getAttribute('fill');
+            const serviceDetails = getServiceDescription(serviceName);
+            
+            // Calculate mid-angle of the wedge for positioning
+            const startAngle = parseFloat(activeGroup.dataset.startAngle);
+            const endAngle = parseFloat(activeGroup.dataset.endAngle);
+            const midAngle = startAngle + ((endAngle - startAngle) / 2);
+            
+            // Show the service description
+            showServiceDescription(serviceDetails, wedgeColor, midAngle);
 
             // --- Animate ACTIVE wedge shape/marker using Anime.js ---
             const sAngle = parseFloat(activeGroup.dataset.startAngle);
@@ -910,6 +923,7 @@ function initializeRadialChart(services, serviceConfig) {
                 anime({
                     targets: activeLabelLine,
                     d: newPathData, // Animate the path data
+                    opacity: 1.0, // Keep active line fully visible
                     duration: fixedWedgeAnimationDurationMs,
                     easing: animeEasing
                 });
@@ -1000,6 +1014,7 @@ function initializeRadialChart(services, serviceConfig) {
                         anime({
                             targets: inactiveLabelLine,
                             d: newPathData, // Animate the path data
+                            opacity: 0, // Fade out inactive lines
                             duration: fixedWedgeAnimationDurationMs,
                             easing: animeEasing
                         });
@@ -1020,9 +1035,13 @@ function initializeRadialChart(services, serviceConfig) {
  
                          anime.remove([boxToScale, textToScale]); // Restore remove call ONLY in MouseEnter
  
+                         // Set opacity lower for inactive elements
+                         const opacity = group === activeGroup ? 1.0 : 0.0; // Completely fade out inactive boxes
+                         
                          anime({
                              targets: [boxToScale, textToScale], // Target BOX and TEXT only
                              transform: targetTransform, // Animate transform attribute directly
+                             opacity: opacity, // Animate opacity
                              duration: fixedTextAnimationDurationMs, // Use FIXED duration for text boxes
                              easing: animeEasing
                          });
@@ -1046,6 +1065,9 @@ function initializeRadialChart(services, serviceConfig) {
             const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
             const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
 
+            // Hide the service description
+            hideServiceDescription();
+            
             // --- Animate ACTIVE wedge back using Anime.js ---
             const originalD = activeGroup.dataset.originalPath;
             const originalMX = activeGroup.dataset.originalMarkerX;
@@ -1095,6 +1117,7 @@ function initializeRadialChart(services, serviceConfig) {
                 anime({
                     targets: activeLabelLine,
                     d: originalPathData, // Animate the path data
+                    opacity: 1.0, // Restore full opacity
                     duration: fixedWedgeAnimationDurationMs,
                     easing: animeEasing
                 });
@@ -1159,6 +1182,7 @@ function initializeRadialChart(services, serviceConfig) {
                     anime({
                         targets: labelGroup.querySelector('.label-line'),
                         d: originalPathData, // Animate the path data
+                        opacity: 1.0, // Restore full opacity
                         duration: fixedWedgeAnimationDurationMs,
                         easing: animeEasing
                     });
@@ -1179,6 +1203,7 @@ function initializeRadialChart(services, serviceConfig) {
                          anime({
                              targets: [boxToReset, textToReset], // Target BOTH box and text
                              transform: targetTransform, // Use consistent transform pattern
+                             opacity: 1.0, // Reset opacity to full
                              duration: fixedTextAnimationDurationMs, // Use FIXED duration for text boxes
                              easing: animeEasing
                          });
@@ -1192,6 +1217,101 @@ function initializeRadialChart(services, serviceConfig) {
          } catch(err) { console.error("Error in mouseleave:", err); }
     }
 
+    // Get service description from services array
+    function getServiceDescription(serviceName) {
+        const service = services.find(s => s.name === serviceName);
+        return service ? service : { name: serviceName, description: "No description available." };
+    }
+
+    // --- Store timeout IDs for cancellation ---
+    let descriptionHideTimeout = null;
+
+    // Show service description with animation (simplified)
+    function showServiceDescription(service, color, wedgeAngle) {
+        // Cancel any pending hide operation
+        if (descriptionHideTimeout) {
+            clearTimeout(descriptionHideTimeout);
+            descriptionHideTimeout = null;
+        }
+
+        const container = document.querySelector('.service-description-container');
+        const nameElement = container.querySelector('.service-name');
+        const descriptionElement = container.querySelector('.service-description');
+        const box = container.querySelector('.service-description-box');
+        
+        // Update content
+        nameElement.textContent = service.name;
+        descriptionElement.textContent = service.description;
+        
+        // Update colors
+        box.style.borderLeftColor = color;
+        nameElement.style.setProperty('--underline-color', color);
+        
+        // Position based on wedge angle (left or right of SVG)
+        const svgContainer = document.getElementById('radial-chart-svg');
+        const svgRect = svgContainer.getBoundingClientRect();
+        const isRightSide = wedgeAngle < 180;
+        
+        // First make it visible but off-screen for measuring
+        container.style.display = 'block';
+        container.style.visibility = 'visible';
+        container.style.opacity = '0';
+        container.style.position = 'absolute';
+        container.style.left = '-9999px';
+        container.style.right = 'auto';
+        container.style.top = '0';
+        container.style.transform = 'none';
+        
+        // Force a reflow to ensure measurements are accurate
+        void container.offsetWidth;
+        
+        // Measure the container's height
+        const containerHeight = container.offsetHeight;
+        
+        // Position the box with accurate vertical centering
+        container.style.position = 'absolute';
+        container.style.top = '50%';
+        container.style.transform = `translateY(calc(-50%))`;
+        
+        if (isRightSide) {
+            // If wedge is on right side, box on left
+            container.style.left = '-350px'; 
+            container.style.right = 'auto';
+        } else {
+            // If wedge is on left side, box on right
+            container.style.right = '-350px';
+            container.style.left = 'auto';
+        }
+        
+        // Make fully visible
+        container.style.opacity = '1';
+    }
+
+    // Hide service description
+    function hideServiceDescription() {
+        const container = document.querySelector('.service-description-container');
+        if (!container) return;
+        
+        // Just set opacity to 0 first and let it fade out
+        container.style.opacity = '0';
+        
+        // Only hide visibility AFTER the opacity transition completes
+        const transitionDuration = 500; // Match this to the CSS transition duration
+        
+        // Store the timeout ID so we can cancel it if needed
+        if (descriptionHideTimeout) {
+            clearTimeout(descriptionHideTimeout);
+        }
+        
+        descriptionHideTimeout = setTimeout(() => {
+            // Only hide if the opacity is still 0 (no show has happened in between)
+            if (container.style.opacity === '0') {
+                container.style.visibility = 'hidden';
+                container.style.display = 'none';
+            }
+            descriptionHideTimeout = null;
+        }, transitionDuration);
+    }
 
     // --- Place Center Logo ---
      const logoSizeFactor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--logo-size-factor')) || 0.6;

@@ -5,13 +5,34 @@
 
 // Export the services array to be consumed by the main script
 export const services = [
-    { name: "Cyber Strategy & Executive Risk" },
-    { name: "Security Assessment & Architecture" },
-    { name: "Governance, Risk & Compliance (GRC)" },
-    { name: "Privacy, Identity & Trust" },
-    { name: "Offensive Security" },
-    { name: "Managed Cyber Programs" },
-    { name: "Cybersecurity Innovation" }
+    { 
+        name: "Cyber Strategy & Executive Risk",
+        description: "Our Cyber Strategy & Executive Risk services provide enterprise-wide roadmaps aligned with business objectives. We help organizations develop comprehensive security strategies, navigate complex regulatory landscapes, and build resilient security programs that balance protection with operational efficiency."
+    },
+    { 
+        name: "Security Assessment & Architecture",
+        description: "Through our Security Assessment & Architecture services, we evaluate existing security postures and design robust frameworks tailored to your environment. Our experts analyze vulnerabilities, identify control gaps, and create architectural blueprints that enhance your security while supporting business agility."
+    },
+    { 
+        name: "Governance, Risk & Compliance (GRC)",
+        description: "Our GRC services establish structured approaches to manage cybersecurity obligations across regulatory requirements and industry standards. We implement frameworks that streamline compliance processes, optimize risk management, and ensure your organization meets its legal and contractual obligations."
+    },
+    { 
+        name: "Privacy, Identity & Trust",
+        description: "We help organizations protect sensitive data and maintain customer trust through comprehensive privacy programs. Our identity and trust solutions ensure secure authentication, proper access controls, and data protection measures that satisfy evolving privacy regulations while enhancing user experience."
+    },
+    { 
+        name: "Offensive Security",
+        description: "Our Offensive Security services simulate real-world attacks to identify and remediate vulnerabilities before they can be exploited. Through penetration testing, red team exercises, and targeted assessments, we help you understand and address weaknesses from an attacker's perspective."
+    },
+    { 
+        name: "Managed Cyber Programs",
+        description: "With our Managed Cyber Programs, we provide ongoing security expertise and operational support to organizations with limited internal resources. These flexible, subscription-based services include continuous monitoring, threat detection, incident response, and specialized cybersecurity guidance."
+    },
+    { 
+        name: "Cybersecurity Innovation",
+        description: "Our Cybersecurity Innovation services explore emerging technologies and approaches to address evolving threats. We help organizations implement cutting-edge solutions like AI-powered defense systems, advanced threat intelligence, and security automation to stay ahead of sophisticated adversaries."
+    }
 ];
 
 // You can add additional configurations here as needed

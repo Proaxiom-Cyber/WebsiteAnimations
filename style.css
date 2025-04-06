@@ -160,4 +160,99 @@ body {
   font-family: 'Poppins', sans-serif; /* Use Poppins font */
   font-weight: 700; /* Bold weight */
   pointer-events: none; /* Prevent text from capturing mouse events */
+  opacity: 1; /* Ensure default opacity is set to 1 */
+}
+
+/* Service Description Styles */
+.service-description-container {
+  position: absolute;
+  width: 300px;
+  opacity: 0;
+  visibility: hidden;
+  display: none;
+  transition: opacity 0.5s ease;
+  z-index: 1000;
+  pointer-events: none;
+  box-sizing: border-box;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  height: auto; /* Allow height to adjust to content */
+  max-height: 80vh; /* Maximum height of 80% of viewport height */
+}
+
+/* Position variants - remove fixed positions */
+.service-description-container.position-right,
+.service-description-container.position-left,
+.service-description-container.position-top,
+.service-description-container.position-bottom {
+  /* Positions will be set dynamically through JavaScript */
+}
+
+.service-description-box {
+  padding: 24px;
+  border-left: 6px solid var(--color-teal); /* Accent border - dynamically updated */
+  position: relative;
+  overflow: visible; /* Changed from hidden to visible */
+  width: 100%;
+  box-sizing: border-box;
+  height: auto; /* Allow dynamic height */
+  max-height: none; /* Remove max height constraint */
+  overflow-y: visible; /* Remove scrolling */
+}
+
+/* Optional decorative element */
+.service-description-box::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.03) 50%);
+  border-radius: 0 0 0 60px;
+  z-index: -1;
+}
+
+.service-description-container.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.service-name {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  color: var(--color-indigo);
+  position: relative;
+  word-wrap: break-word; /* Allow word breaking */
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: 100%;
+  display: block;
+  line-height: 1.3;
+  hyphens: auto;
+  --underline-color: var(--color-mint); /* Default color, will be overridden */
+}
+
+.service-name::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 3px;
+  background-color: var(--underline-color); /* Use the CSS variable */
+  margin-top: 8px;
+}
+
+.service-description {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #444;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 400;
+  word-wrap: break-word; /* Allow word breaking for long words */
+  overflow-wrap: break-word;
+  white-space: normal; /* Ensure text wraps */
 }
