@@ -1057,7 +1057,7 @@ function initializeRadialChart(services, serviceConfig) {
     }
 
     function handleMouseLeave(event) {
-         try {
+        try {
             const activeGroup = event.currentTarget; // The group being left
             const activePath = activeGroup.querySelector('.wedge-path');
             const activeMarker = activeGroup.querySelector('.marker-circle');
@@ -1065,8 +1065,16 @@ function initializeRadialChart(services, serviceConfig) {
             const activeLabelGroup = labelsGroup.querySelector(`.label-group-${wedgeIndex}`); // Find the group
             const activeLabelLine = activeLabelGroup ? activeLabelGroup.querySelector('.label-line') : null; // Find line within group
 
-            // Hide the service description
-            hideServiceDescription();
+            // Set flag indicating mouse left this wedge
+            isMouseOverAnyWedge = false;
+
+            // Delay hiding the description to check if we move to another wedge
+            setTimeout(() => {
+                // Only hide if we're not over any wedge
+                if (!isMouseOverAnyWedge) {
+                    hideServiceDescription();
+                }
+            }, 50); // Short delay to allow for mouseenter on adjacent wedge
             
             // --- Animate ACTIVE wedge back using Anime.js ---
             const originalD = activeGroup.dataset.originalPath;
@@ -1214,7 +1222,7 @@ function initializeRadialChart(services, serviceConfig) {
             // Hide tooltip
             // tooltip.classList.remove('active'); // REMOVED
 
-         } catch(err) { console.error("Error in mouseleave:", err); }
+        } catch(err) { console.error("Error in mouseleave:", err); }
     }
 
     // Get service description from services array
@@ -1223,10 +1231,12 @@ function initializeRadialChart(services, serviceConfig) {
         return service ? service : { name: serviceName, description: "No description available." };
     }
 
-    // --- Store timeout IDs for cancellation ---
+    // --- Store state variables ---
     let descriptionHideTimeout = null;
+    let currentActiveWedge = null;
+    let isMouseOverAnyWedge = false; // Add tracking for mouse over state
 
-    // Show service description with animation (simplified)
+    // Show service description with animation
     function showServiceDescription(service, color, wedgeAngle) {
         // Cancel any pending hide operation
         if (descriptionHideTimeout) {
@@ -1239,52 +1249,87 @@ function initializeRadialChart(services, serviceConfig) {
         const descriptionElement = container.querySelector('.service-description');
         const box = container.querySelector('.service-description-box');
         
-        // Update content
-        nameElement.textContent = service.name;
-        descriptionElement.textContent = service.description;
+        // Create a smooth transition when changing between wedges
+        const isSameWedge = currentActiveWedge && currentActiveWedge.name === service.name;
+        const isAlreadyVisible = container.style.display === 'block' && 
+                               container.style.visibility === 'visible';
         
-        // Update colors
-        box.style.borderLeftColor = color;
-        nameElement.style.setProperty('--underline-color', color);
-        
-        // Position based on wedge angle (left or right of SVG)
-        const svgContainer = document.getElementById('radial-chart-svg');
-        const svgRect = svgContainer.getBoundingClientRect();
-        const isRightSide = wedgeAngle < 180;
-        
-        // First make it visible but off-screen for measuring
-        container.style.display = 'block';
-        container.style.visibility = 'visible';
-        container.style.opacity = '0';
-        container.style.position = 'absolute';
-        container.style.left = '-9999px';
-        container.style.right = 'auto';
-        container.style.top = '0';
-        container.style.transform = 'none';
-        
-        // Force a reflow to ensure measurements are accurate
-        void container.offsetWidth;
-        
-        // Measure the container's height
-        const containerHeight = container.offsetHeight;
-        
-        // Position the box with accurate vertical centering
-        container.style.position = 'absolute';
-        container.style.top = '50%';
-        container.style.transform = `translateY(calc(-50%))`;
-        
-        if (isRightSide) {
-            // If wedge is on right side, box on left
-            container.style.left = '-350px'; 
-            container.style.right = 'auto';
+        // If transitioning between different wedges, fade out current content first
+        if (isAlreadyVisible && !isSameWedge) {
+            // First fade out the content
+            anime({
+                targets: [nameElement, descriptionElement],
+                opacity: 0,
+                duration: 150,
+                easing: 'easeOutQuad',
+                complete: function() {
+                    // After fade out completes, update content and fade back in
+                    updateDescriptionContent();
+                }
+            });
         } else {
-            // If wedge is on left side, box on right
-            container.style.right = '-350px';
-            container.style.left = 'auto';
+            // First appearance or same wedge - update content immediately
+            updateDescriptionContent();
         }
         
-        // Make fully visible
-        container.style.opacity = '1';
+        // Set mouse over state
+        isMouseOverAnyWedge = true;
+        
+        // Update the current active wedge
+        currentActiveWedge = service;
+        
+        function updateDescriptionContent() {
+            // Update content
+            nameElement.textContent = service.name;
+            descriptionElement.textContent = service.description;
+            
+            // Update colors
+            box.style.borderLeftColor = color;
+            nameElement.style.setProperty('--underline-color', color);
+            
+            // Position based on wedge angle
+            const isRightSide = wedgeAngle < 180;
+            
+            // Position the box
+            container.style.position = 'absolute';
+            container.style.top = '50%';
+            container.style.transform = `translateY(calc(-50%))`;
+            
+            if (isRightSide) {
+                // If wedge is on right side, box on left
+                container.style.left = '-350px'; 
+                container.style.right = 'auto';
+            } else {
+                // If wedge is on left side, box on right
+                container.style.right = '-350px';
+                container.style.left = 'auto';
+            }
+            
+            // Make container visible if not already
+            container.style.display = 'block';
+            container.style.visibility = 'visible';
+            
+            // Fade in content if needed
+            if (!isAlreadyVisible || !isSameWedge) {
+                nameElement.style.opacity = '0';
+                descriptionElement.style.opacity = '0';
+                
+                anime({
+                    targets: [nameElement, descriptionElement],
+                    opacity: 1,
+                    duration: 300,
+                    easing: 'easeOutQuad'
+                });
+            }
+            
+            // Always ensure container is fully visible
+            anime({
+                targets: container,
+                opacity: 1,
+                duration: isAlreadyVisible ? 0 : 300, // Skip animation if already visible
+                easing: 'easeOutQuad'
+            });
+        }
     }
 
     // Hide service description
@@ -1292,25 +1337,21 @@ function initializeRadialChart(services, serviceConfig) {
         const container = document.querySelector('.service-description-container');
         if (!container) return;
         
-        // Just set opacity to 0 first and let it fade out
-        container.style.opacity = '0';
+        // No active wedge now
+        currentActiveWedge = null;
         
-        // Only hide visibility AFTER the opacity transition completes
-        const transitionDuration = 500; // Match this to the CSS transition duration
-        
-        // Store the timeout ID so we can cancel it if needed
-        if (descriptionHideTimeout) {
-            clearTimeout(descriptionHideTimeout);
-        }
-        
-        descriptionHideTimeout = setTimeout(() => {
-            // Only hide if the opacity is still 0 (no show has happened in between)
-            if (container.style.opacity === '0') {
+        // Fade out the container
+        anime({
+            targets: container,
+            opacity: 0,
+            duration: 400,
+            easing: 'easeOutQuad',
+            complete: function() {
+                // Only after the animation completes, hide the container
                 container.style.visibility = 'hidden';
                 container.style.display = 'none';
             }
-            descriptionHideTimeout = null;
-        }, transitionDuration);
+        });
     }
 
     // --- Place Center Logo ---
